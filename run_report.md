@@ -1,92 +1,104 @@
-# 实验报告（运行结果摘要）
+# 实验报告：当前研究设计与结果状态
 
-**生成时间：** 2026-07-22
+**文档更新时间：** 2026-07-23
 
-## 1. 研究背景与动机 (Introduction)
+**当前代码版本：** 整合合约日表训练 + 统一评价审计层
 
-- **商品期货的独特性：** 商品期货除了存在显著的横截面差异外，还深受宏观与产业链因素影响，品种间相关性常随宏观环境波动而改变。
-- **机器学习的引入：** 传统的 CTA 或单因子排序在复杂非线性关系面前容易失效。本文采用 1D-CNN 来捕捉多因子的时序和横截面非线性交互，以提高短窗口（20 日）内的预测稳定性。
+**结果状态：** 等待使用新整合数据完成 2015—2025 全量训练
 
-## 2. 数据处理与合约映射 (Data & Preprocessing)
+## 1. 报告边界
 
-- **主力合约拼接：** 使用基于滞后活跃度（上日成交量与持仓量构成的 activity）判断主力合约，避免使用未来数据，从而有效防止前视偏差（look-ahead bias）。
-- **换月逻辑与展期收益处理：** 优先使用同日近远月价格计算展期收益（roll yield）；当缺失时回退到合约字段中的直接 roll 字段、现货/基差或 settle/close 代理，保证在多种数据降级场景下都能获得展期特征。
-- **数据预热（Burn-in）：** 对每个品种预留 90 天用于滚动统计（如动量、波动率等），确保模型训练与第一条样本均使用完整的滚动窗口。
+本报告描述当前代码与数据设计，不沿用旧运行的绩效数值作为新版本结论。项目中的 `futures_ml_outputs` 和 `run_report.pdf` 来源于数据整合与训练入口重构前的历史实验。由于数据、品种池、特征生成和训练起点已经变化，旧结果不能与当前整合数据版本直接比较。
 
-## 3. 多维度因子工程 (Feature Engineering)
+完成新的全量训练后，应以 `unified_metrics_panel.csv`、`cost_scenarios.csv`、`statistical_tests.csv` 和稳健性附表更新本报告的正式结果章节。在此之前，任何年化收益、Sharpe、最大回撤或 IC 数值都应标注为历史结果，而不是当前模型结果。
 
-- **选取的核心因子（5 个）：**
-  - 动量（20 日）：$\text{momentum}_{20}=\sum_{i=0}^{19}\log(1+R_{t-i})$。
-  - 展期收益率（roll yield）：使用近远月价格按年化对数差进行计算，若近月价格 $P_n$、远月价格 $P_f$，且间隔 $D$ 天，则
-  $$\text{roll} = \log\frac{P_n}{P_f}\times\frac{365}{D}.$$ 
-  - 波动率（20 日）：年化样本标准差 $\sigma_{20}=\sqrt{252}\,\mathrm{std}(R_{t-19:t})$。
-  - 流动性：$\text{liquidity}=\log\left(1+\frac{\text{volume}}{\text{open\_interest}}\right)$。
-  - 偏度（20 日）：20 日滚动样本偏度。
+## 2. 数据与研究样本
 
-- **去极值与标准化：** 先用绝对中位差（MAD）方法对异常值截断（scale 因子为 $1.4826\times\text{MAD}$），随后对横截面做 Z-Score 标准化，保证不同因子在同一量纲下输入网络。
+当前默认训练源为 `futures_contract_daily_30varieties_2015_2025.csv`，字段定义见 `整合后CSV字段说明.md`。数据粒度为“实际期货合约 × 交易日”，唯一键为 `trade_date + ts_code`，覆盖 2015-01-05 至 2025-12-31。
 
-## 4. 深度学习模型架构 (Model Architecture)
+研究池包含 30 个商品期货品种，涉及能源、金属、化工和农产品。整合表提供合约元数据、OHLC、结算价、成交量、持仓量、手续费、保证金、现货、仓单、库存和对应观测陈旧天数。`fut_basic_all.csv` 继续作为合约上市、退市和交割信息的补充来源。
 
-- **输入与输出：** 输入张量维度为 $[B,5,20]$（Batch，5 因子，20 日序列），输出为单值的下一持有期截面超额收益预测。
-- **网络结构要点：** 多层 1D 卷积块（每块为两次 Conv1d + GroupNorm + GELU + MaxPool），全局平均池化后进入两层全连线回归头。
-- **防过拟合：** 使用 Dropout 与 Huber Loss（对尖峰噪声更鲁棒），训练中采用早停（patience=7）与训练内时间验证来选择 epoch。
+代码默认只读取整合表，不再同时扫描年度原始行情，避免相同合约日记录重复加载。2015—2021 年用于首个扩展训练窗，2022 年为首个样本外测试年，后续逐年扩展至 2025 年。
 
-### 训练/验证损失曲线
+## 3. 因果主力合约与标签
 
-![Training / Validation Loss](futures_ml_outputs/loss_curve.png)
+主力合约仅使用滞后成交量和持仓量构成的活跃度选择。换月需要满足后月合约活跃度超过当前合约一定比例，并禁止无理由滚回更近月份。该设计避免使用当日收盘后才能确认的完整活跃度进行同日选择。
 
-*图：`futures_ml_outputs/loss_curve.png`，显示每个 Walk-Forward 折中的训练与验证 Loss。*
+信号在决策日 `t` 收盘后形成，于 `t+1` 开盘执行。未来 5 日标签由从 `t+1` 开盘开始的五段 open-to-open 收益复合得到。若持有期发生主力换月，每一天均使用当时因果选出的实际主力合约收益，避免把不同合约间价格跳空误当作投资收益。
 
-## 5. 滚动验证与回测体系 (Experimental Setup)
+回归标签为未来 5 日累计截面超额收益，分类标签为该超额收益是否大于零。实际组合回测仍按日使用 open-to-open 收益，不把重叠的 5 日标签当作每日组合收益。
 
-- **Walk-Forward 设置：** 每个测试年采用前 3 年数据训练、次年样本外测试（3 年训练 + 1 年测试），并在训练内使用时间序列验证（保留最近 20 天为验证），确保时间上严格前后分离。
-- **截面多空构建：** 每个样本日对全品种按预测得分排序，做多预测前 20%（权重合计 0.5），做空预测后 20%（权重合计 -0.5），合约层合并权重并按合约换手计费。
+## 4. 特征工程
 
-## 6. 实验结果与绩效分析 (Empirical Results)
+当前整合模式生成 59 个输入字段，包括 45 个连续特征和 14 个缺失质量标志。连续特征覆盖价格收益和多周期动量、趋势效率、已实现波动率和偏度、日内振幅、成交量与持仓变化、流动性、期限结构、现货动量、仓单和库存变化。
 
-- 关键样本外绩效指标（摘自 `futures_ml_outputs/backtest_metrics.csv`）：
+连续特征先按品种做只使用历史数据的时间序列变换，再按交易日进行横截面 MAD 稳健标准化和板块去均值。缺失位置单独记录为质量标志，模型连续输入最终填为有限数值。现货、仓单和库存结合 `*_age_days` 屏蔽过度陈旧的观测，降低长期前向填充数据被误当成最新信息的风险。
 
-| 场景 | 单边费率 | 年化收益 | 夏普比率 | 最大回撤 | 胜率 |
-|---:|---:|---:|---:|---:|---:|
-| Gross (不计交易费) | 0.0 | -0.2627% | 0.00565 | -20.39% | 49.31% |
-| 1 bp one-way | 0.0001 | -1.9955% | -0.2178 | -22.52% | 48.68% |
-| 3 bp one-way | 0.0003 | -5.3717% | -0.6644 | -32.61% | 47.57% |
-| 5 bp one-way | 0.0005 | -8.6321% | -1.1106 | -44.48% | 46.12% |
+该 59 特征体系是当前整合数据流程重新生成的训练输入，不等同于旧 `ml_feature_registry.csv` 和 `ml_features_development.csv.gz` 的同名交接体系。旧矩阵的品种池与当前新 30 品种池不一致，仅用于兼容和历史复现。
 
-> 注：负的年化收益与低夏普提示在当前参数/样本下策略并未实现正向收益，但结果有助于诊断信号稳定性与交易摩擦敏感性。
+## 5. 模型架构
 
-### 累计净值曲线
+模型输入张量为 `[Batch, 59, 20]`。Conv1d 提取 20 日窗口中的局部模式，品种 Embedding 提供合约品种上下文，单层 Transformer Encoder 建模跨时间依赖。经过 LayerNorm 和时间维平均池化后，网络分为分类头和回归头。
 
-![Cumulative Net Value](futures_ml_outputs/cumulative_return.png)
+总损失为：
 
-*图：`futures_ml_outputs/cumulative_return.png`，显示样本外净值与回撤走势。*
+```text
+0.7 × BCEWithLogitsLoss + 0.3 × HuberLoss
+```
 
-### 因子重要性（置换法）
+综合预测信号为：
 
-![Feature Importance](futures_ml_outputs/feature_importance.png)
+```text
+prediction = sigmoid(logits) × regression_prediction
+```
 
-*图：`futures_ml_outputs/feature_importance.png`，展示置换重要性归因，便于判断模型依赖的主导因子。*
+训练采用扩展窗口和训练内时间验证，并在训练与验证之间保留 purge 区间。由于未来 5 日标签重叠，训练期每 5 个交易日采样一次完整横截面；验证和测试保持逐日预测。
 
-## 7. 摩擦成本敏感性与可行性 (Limitations & Feasibility)
+## 6. 组合构建与风险控制
 
-- **费率敏感性图（1/3/5 bp）：**
+模型信号使用 3 日 EMA 平滑。多头在信号进入当日上 30%且大于零时进入，空头在下 30%且小于零时进入；已有持仓在信号越过当日中位数后退出。组合按信号绝对强度分配权重，不强制每天两侧都有固定数量持仓。
 
-![Fee Sensitivity](futures_ml_outputs/fee_sensitivity.png)
+系统性压力状态由市场波动率、品种平均相关性和流动性压力构成。每个测试年仅使用此前历史数据拟合 StandardScaler 和两状态 Gaussian Mixture Model。压力概率超过 0.8 时，组合毛敞口由 1.0 降至 0.5。
 
-*图：`futures_ml_outputs/fee_sensitivity.png`，展示随着单边费用上升，净值的退化情况。*
+原回测继续保留 1、3、5 bps 单边成本，保证与历史输出兼容。新增展示表另行计算 0、3、5、10 bps，不改变原策略收益列。
 
-- **实盘落地挑战：** 当前回测采用固定 bp 成本，但没有完整建模涨跌停无法成交、冲击成本、保证金约束与限仓等实盘要素，导致回测偏乐观或保守均有可能。
+## 7. 统一评价与审计基座
 
-- **建议的下一步改进（简要）：**
-  - 引入基于盘口深度的冲击成本模型或微观价差回归；
-  - 在回测中加入保证金/持仓限制逻辑并测算实际资金占用；
-  - 使用市场状态识别（例如 HMM）做动态仓位调整；
-  - 考虑产业链或宏观因子残差，提升跨品种信息利用效率。
+当前版本统一输出以下评价维度：每日 Pearson IC、每日 Rank IC、分年 Rank IC、累计收益、年化收益、年化波动、Sharpe、最大回撤、Calmar、平均换手和多成本情景。
 
-## 附录
+统计显著性包括 Newey-West/Bartlett HAC 标准误、t 统计量和双侧 p 值，以及固定 20 日块长、1,000 次重复的圆形块自助法 95% 百分位区间。主面板中的 `t_stat` 和 `p_value` 默认检验 3 bps 单边成本下日度多空收益均值是否为零。
 
-- 关键输出目录：`futures_ml_outputs/`
-  - `loss_curve.png`, `cumulative_return.png`, `fee_sensitivity.png`, `feature_importance.png`
-  - `backtest_metrics.csv`, `daily_backtest.csv`, `oos_predictions.csv`, `training_history.csv`
+稳健性附表覆盖 1/5/20 日持有期、能源/金属/化工/农产品、剔除每日最低 20% 有效流动性样本以及信号延迟一个市场交易日。五分组收益表记录分组平均收益、最高组减最低组价差和相邻分组收益递增比例。
 
+若 `equal_weight_multi_factor` 基准不存在，`ir` 使用零基准，并在输出中明确说明其数值等同于相同口径下的 Sharpe。`ic_ir` 为日度 IC 均值除以日度 IC 标准差，不做年化。
 
+## 8. 当前结果状态
+
+新的全量训练尚未在本次代码与文档更新中完成，因此本报告不展示旧版绩效表。当前根目录中的 `run_report.pdf` 和 `futures_ml_outputs` 应视为历史运行快照。
+
+启动新实验可双击 `run_integrated_training.bat`。训练完成后，应首先检查：
+
+```text
+futures_ml_outputs/unified_metrics_panel.csv
+futures_ml_outputs/cost_scenarios.csv
+futures_ml_outputs/statistical_tests.csv
+futures_ml_outputs/rank_ic_by_year.csv
+futures_ml_outputs/robustness_holding_period.csv
+futures_ml_outputs/robustness_sector.csv
+futures_ml_outputs/robustness_liquidity.csv
+futures_ml_outputs/robustness_signal_delay.csv
+```
+
+随后再将正式数值、图表和结论写入本节。若评价层失败，原模型和原回测仍会保存，并额外生成 `evaluation_audit_error.txt` 说明错误。
+
+## 9. 局限性
+
+当前固定 bp 交易成本不能完整表达按成交金额计费、固定元/手计费、平今差异、期货公司加收、市场冲击和盘口深度。整合数据中的 `trading_fee_rate` 与 `trading_fee` 属于不同计费口径，当前策略没有直接用其替代固定 bp 成本。
+
+现货数据在 2024—2025 年可能沿用较早观测，因此特征工程使用陈旧天数限制，但仍需在结果解释中关注覆盖率。20 日持有期稳健性使用已有样本外逐日可交易收益构造，是展示层近似，不参与模型训练或原组合收益计算。
+
+本研究不构成投资建议。正式实盘前仍需加入涨跌停、无法成交、保证金、限仓、冲击成本和容量约束。
+
+## 附录：文件状态
+
+当前必需文件、兼容文件、历史输出和建议归档文件的完整分类见 [`FILE_STATUS.md`](FILE_STATUS.md)。项目未自动删除或重命名任何数据文件。

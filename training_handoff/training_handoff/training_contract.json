@@ -1,0 +1,36 @@
+{
+  "package_version": "1.0",
+  "feature_file": "ml_features_development.csv.gz",
+  "registry_file": "ml_feature_registry.csv",
+  "label_file": "labels_development.csv.gz",
+  "join_keys": [
+    "trade_date",
+    "product"
+  ],
+  "identifier_columns": [
+    "trade_date",
+    "product",
+    "sector"
+  ],
+  "feature_column_source": {
+    "file": "ml_feature_registry.csv",
+    "column": "feature_name",
+    "use_all_rows": true
+  },
+  "default_target": "future_return_5d",
+  "available_targets": [
+    "future_return_1d",
+    "future_return_5d",
+    "future_return_20d"
+  ],
+  "development_feature_start": "2015-01-05",
+  "development_feature_end": "2024-12-31",
+  "validation_start": "2018-01-01",
+  "validation_end": "2024-12-31",
+  "rolling_train_years": 3,
+  "purge_trading_days_for_default_target": 5,
+  "random_split_allowed": false,
+  "sealed_2025_included": false,
+  "feature_preprocessing": "same-date cross-sectional median/MAD clipping and standardization; missing values filled with zero; quality masks included",
+  "target_note": "future_return_5d compounds five daily open-to-close tradable returns"
+}

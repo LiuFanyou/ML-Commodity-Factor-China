@@ -1,5 +1,29 @@
-﻿futures_env/
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+futures_env/
+.venv/
+venv/
+env/
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+
+# Model and output artifacts
 futures_ml_outputs/
+*.pth
+*.pkl
+*.joblib
+*.h5
+*.onnx
+*.pt
+
+# Data folders and raw datasets
+futures_data/
 fut_settle_by_date/
 2015/
 2016/
@@ -12,11 +36,30 @@ fut_settle_by_date/
 2023/
 2024/
 2025/
-__pycache__/
+
+# Large / generated files
 *.csv
-*.pth
-*.dll
-*.lib
-*.pkl
+*.csv.gz
+*.parquet
+*.feather
+*.npz
+*.npy
 *.png
-*.json
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.pdf
+*.log
+*.tmp
+
+# Obsolete draft notes not meant for GitHub
+30个品种.md
+30个品种_clean.md
+training_handoff/__MACOSX/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -64,20 +64,28 @@ class Config:
         r"D:\大学\大二下\财大量化\tushare_theme7\tushare_theme7",
     )
     local_windows_data_root: str = r"D:\大学\大二下\财大量化\tushare_theme7\tushare_theme7"
+    feature_registry_path: Optional[str] = None
+    feature_matrix_path: Optional[str] = None
+    integrated_market_path: Optional[str] = os.getenv("FUTURES_INTEGRATED_CSV")
+    # auto: 发现整合表时由整合表重建因果特征，否则使用旧59因子交接包；
+    # integrated/handoff 可强制指定路径。
+    feature_mode: str = os.getenv("FUTURES_FEATURE_MODE", "auto").strip().lower()
+    expected_feature_count: int = 59
     output_dir: str = (
         "/kaggle/working/futures_ml_outputs"
         if Path("/kaggle/working").exists()
         else str(Path.cwd() / "futures_ml_outputs")
     )
 
-    # 固定的代表性基础池，避免利用全样本未来流动性进行事后选品。
-    # 28 个品种覆盖黑色、能化、有色、贵金属、油脂油料和农产品。
+    # 固定30品种研究池。交接特征必须覆盖全部品种，否则严格报错停止。
     products: Tuple[str, ...] = (
-        "RB", "HC", "I", "J", "JM",
-        "TA", "MA", "SA", "PP", "L", "V", "EG", "RU", "BU",
-        "CU", "AL", "ZN", "NI", "AU", "AG",
-        "M", "Y", "P", "C", "CF", "SR", "RM", "OI",
+        "RB", "HC", "I", "JM", "J", "SF",
+        "CU", "AL", "ZN", "NI", "SN",
+        "SC", "FU", "BU", "TA", "MA", "L", "PP", "V",
+        "M", "Y", "P", "C", "CS", "SR", "CF", "RM",
+        "AU", "AG", "SA",
     )
+    product_embedding_dim: int = 8
     min_cross_section: int = 10
     min_days_to_expiry: int = 7
     roll_switch_ratio: float = 1.10
@@ -87,11 +95,11 @@ class Config:
     burn_in_days: int = 90  # 应位于 60~120 个交易日范围内
     mad_n: float = 3.0
 
-    data_start_year: int = 2018
+    data_start_year: int = 2015
     data_end_year: int = 2025
 
-    # Expanding Window：2018-2021 训练，2022 首个样本外测试，随后逐年扩展。
-    train_start_year: int = 2018
+    # Expanding Window：2015-2021 训练，2022 首个样本外测试，随后逐年扩展。
+    train_start_year: int = 2015
     first_test_year: int = 2022
     last_test_year: int = 2025
     forecast_horizon: int = 5
@@ -103,7 +111,7 @@ class Config:
     attention_heads: int = 4
     transformer_ff_dim: int = 96
     transformer_layers: int = 1
-    dropout: float = 0.10
+    dropout: float = 0.40
     multitask_alpha: float = 0.70
     train_date_stride: int = 5
     batch_size: int = 512
@@ -133,16 +141,26 @@ class Config:
 
 
 CFG = Config()
-# 原始日频量价特征 + 商品期限结构；全部按 trade_date 截面 MAD/Z-Score。
-FACTOR_COLS = [
-    "log_open_close",
-    "log_high_close",
-    "log_low_close",
-    "log_close_prev_close",
-    "volume_change",
-    "open_interest_change",
-    "roll_yield",
-]
+# 运行时由 ml_feature_registry.csv 的 feature_name 列动态覆盖。
+FACTOR_COLS: List[str] = []
+
+PRODUCT_METADATA: Dict[str, Tuple[str, str]] = {
+    "RB": ("黑色产业链", "螺纹钢"), "HC": ("黑色产业链", "热卷"),
+    "I": ("黑色产业链", "铁矿石"), "JM": ("黑色产业链", "焦煤"),
+    "J": ("黑色产业链", "焦炭"), "SF": ("黑色产业链", "硅铁"),
+    "CU": ("有色金属", "铜"), "AL": ("有色金属", "铝"),
+    "ZN": ("有色金属", "锌"), "NI": ("有色金属", "镍"), "SN": ("有色金属", "锡"),
+    "SC": ("能源化工", "原油"), "FU": ("能源化工", "燃料油"),
+    "BU": ("能源化工", "沥青"), "TA": ("能源化工", "PTA"),
+    "MA": ("能源化工", "甲醇"), "L": ("能源化工", "聚乙烯"),
+    "PP": ("能源化工", "聚丙烯"), "V": ("能源化工", "PVC"),
+    "M": ("农产品", "豆粕"), "Y": ("农产品", "豆油"), "P": ("农产品", "棕榈油"),
+    "C": ("农产品", "玉米"), "CS": ("农产品", "淀粉"), "SR": ("农产品", "白糖"),
+    "CF": ("农产品", "棉花"), "RM": ("农产品", "菜粕"),
+    "AU": ("贵金属", "黄金"), "AG": ("贵金属", "白银"),
+    "SA": ("建材/化工补充", "纯碱"),
+}
+PRODUCT_TO_ID: Dict[str, int] = {symbol: idx for idx, symbol in enumerate(PRODUCT_METADATA)}
 
 
 # =============================================================================
@@ -169,6 +187,15 @@ ALIASES: Dict[str, Tuple[str, ...]] = {
     "direct_roll_yield": ("roll_yield", "rollyield", "carry"),
     "basis": ("basis", "basis_rate", "basisrate"),
     "spot": ("spot", "spot_price", "spotprice"),
+    "spot_age": ("spot_price_age_days", "spot_age_days"),
+    "warehouse_receipt": ("warehouse_receipt_current", "warehouse_receipt"),
+    "warehouse_receipt_change": ("warehouse_receipt_change",),
+    "warehouse_receipt_age": ("warehouse_receipt_age_days",),
+    "warehouse_receipt_conflict": ("warehouse_receipt_conflict",),
+    "stock": ("stock_current", "inventory", "stock"),
+    "stock_age": ("stock_age_days",),
+    "available_stock": ("available_stock_current", "available_inventory"),
+    "available_stock_age": ("available_stock_age_days",),
 }
 
 
@@ -324,6 +351,18 @@ def year_from_path(path: Path) -> Optional[int]:
     return None
 
 
+def find_integrated_market_file(root: Path, cfg: Config) -> Optional[Path]:
+    """定位整合后的合约日表；显式配置优先，其次使用约定文件名。"""
+    if cfg.integrated_market_path:
+        path = Path(cfg.integrated_market_path)
+        if not path.is_absolute():
+            path = root / path
+        if not path.exists():
+            raise FileNotFoundError(f"配置的整合行情文件不存在: {path}")
+        return path
+    return find_named_file(root, "futures_contract_daily_30varieties_2015_2025.csv")
+
+
 def discover_market_files(root: Path, start_year: int, end_year: int) -> List[Path]:
     """只发现目标年份的完整日行情文件，避免读取无关年度和逐日结算参数。"""
     files: List[Path] = []
@@ -346,12 +385,19 @@ def discover_market_files(root: Path, start_year: int, end_year: int) -> List[Pa
 
 
 def load_market_data(root: Path, cfg: Config) -> Tuple[pd.DataFrame, Dict[str, object]]:
-    files = discover_market_files(root, cfg.data_start_year, cfg.data_end_year)
-    print(
-        f"[Data] 仅加载 {cfg.data_start_year}-{cfg.data_end_year}："
-        f"发现 {len(files)} 个完整日行情文件，开始读取……",
-        flush=True,
-    )
+    integrated = find_integrated_market_file(root, cfg)
+    if integrated is not None:
+        files = [integrated]
+        market_source = "integrated_contract_daily"
+        print(f"[Data] 优先使用整合合约日表：{integrated}", flush=True)
+    else:
+        files = discover_market_files(root, cfg.data_start_year, cfg.data_end_year)
+        market_source = "discovered_raw_csvs"
+        print(
+            f"[Data] 未发现整合表，仅加载 {cfg.data_start_year}-{cfg.data_end_year}："
+            f"发现 {len(files)} 个完整日行情文件，开始读取……",
+            flush=True,
+        )
     frames: List[pd.DataFrame] = []
     for i, path in enumerate(tqdm(files, desc="[Data] 读取日行情", unit="文件"), 1):
         frame = read_csv_adaptive(path, required=["contract", "trade_date", "close"])
@@ -375,7 +421,10 @@ def load_market_data(root: Path, cfg: Config) -> Tuple[pd.DataFrame, Dict[str, o
 
     numeric_cols = [
         "open", "high", "low", "close", "settle", "volume", "open_interest",
-        "amount", "direct_roll_yield", "basis", "spot",
+        "amount", "direct_roll_yield", "basis", "spot", "spot_age",
+        "warehouse_receipt", "warehouse_receipt_change", "warehouse_receipt_age",
+        "warehouse_receipt_conflict", "stock", "stock_age", "available_stock",
+        "available_stock_age",
     ]
     for col in numeric_cols:
         if col in data:
@@ -403,6 +452,7 @@ def load_market_data(root: Path, cfg: Config) -> Tuple[pd.DataFrame, Dict[str, o
     data = data[(data["close"] > 0) & (data["open"] > 0)]
 
     report = {
+        "market_data_source": market_source,
         "market_files": len(files),
         "data_years": [cfg.data_start_year, cfg.data_end_year],
         "raw_rows": before,
@@ -573,12 +623,22 @@ def build_product_panel(
     t+1 开盘开始连续 H 个 open-to-open 收益的几何累计值。若持有期内主力
     换月，则每一天使用当时因果选出的实际主力合约收益，避免跨合约价格跳空。
     """
+    panel_fields = [
+        "product", "trade_date", "contract", "open", "high", "low", "close",
+        "settle", "volume", "open_interest", "amount", "delist_date",
+        "contract_close_return", "contract_fwd_open_return", "lag_activity",
+        "direct_roll_yield", "basis", "spot", "spot_age", "warehouse_receipt",
+        "warehouse_receipt_change", "warehouse_receipt_age", "warehouse_receipt_conflict",
+        "stock", "stock_age", "available_stock", "available_stock_age",
+    ]
+    panel_fields = [name for name in panel_fields if name in data.columns]
+    working = data[panel_fields].copy()
     if forecast_horizon < 1:
         raise ValueError("forecast_horizon 必须至少为 1")
     key = selected.set_index(["product", "trade_date"])["contract"]
     rows: List[pd.Series] = []
 
-    groups = data.groupby(["product", "trade_date"], sort=True)
+    groups = working.groupby(["product", "trade_date"], sort=True)
     total_days = int(groups.ngroups)
     for (product, date), day in tqdm(groups, desc="[Panel] 主力与期限结构", total=total_days, unit="日"):
         try:
@@ -651,78 +711,372 @@ def build_product_panel(
 
 
 # =============================================================================
-# 3. 模块化因子工程
+# 3. 工业级特征交接包加载（特征已经预处理，禁止二次标准化）
 # =============================================================================
 
 
-class FactorEngine:
-    """将模型输入转换为原始日频量价变化，并逐日做稳健截面标准化。"""
+def find_handoff_file(root: Path, configured_path: Optional[str], filename: str) -> Path:
+    if configured_path:
+        path = Path(configured_path)
+        if path.exists():
+            return path
+        raise FileNotFoundError(f"配置的交接文件不存在: {path}")
+    direct = root / filename
+    if direct.exists():
+        return direct
+    candidates = [
+        path for path in root.rglob(filename)
+        if "__MACOSX" not in path.parts and not path.name.startswith("._")
+    ]
+    if not candidates:
+        raise FileNotFoundError(f"项目中找不到交接文件 {filename}")
+    # 优先尺寸较大的真实文件，再优先目录层级较浅者。
+    return sorted(candidates, key=lambda x: (-x.stat().st_size, len(x.parts)))[0]
 
-    def __init__(self, window: int = 20, burn_in_days: int = 90, mad_n: float = 3.0):
-        self.window = window
-        self.burn_in_days = burn_in_days
-        self.mad_n = mad_n
 
-    @staticmethod
-    def _safe_log_ratio(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
-        valid = numerator.gt(0) & denominator.gt(0)
-        result = pd.Series(np.nan, index=numerator.index, dtype=float)
-        result.loc[valid] = np.log(numerator.loc[valid] / denominator.loc[valid])
-        return result
+def identify_fundamental_features(registry: pd.DataFrame) -> List[str]:
+    """依据注册表元数据识别低频基本面/库存/仓单/期限结构类连续特征。"""
+    text_cols = [c for c in ["source_factor", "category", "economic_meaning", "transformation"] if c in registry]
+    text = registry[text_cols].fillna("").astype(str).agg(" ".join, axis=1)
+    pattern = r"库存|仓单|现货|基差|期限结构|carry|便利收益|供需|inventory|warehouse|spot|basis|fundamental"
+    continuous = registry.get("usage_type", pd.Series("", index=registry.index)).ne("quality_flag")
+    return registry.loc[continuous & text.str.contains(pattern, case=False, regex=True), "feature_name"].tolist()
 
-    def add_raw_price_volume_features(self, frame: pd.DataFrame) -> pd.DataFrame:
-        frame = frame.sort_values(["product", "trade_date"]).copy()
-        frame["log_open_close"] = self._safe_log_ratio(frame["open"], frame["close"])
-        frame["log_high_close"] = self._safe_log_ratio(frame["high"], frame["close"])
-        frame["log_low_close"] = self._safe_log_ratio(frame["low"], frame["close"])
-        previous_close = frame.groupby("product", sort=False)["close"].shift(1)
-        frame["log_close_prev_close"] = self._safe_log_ratio(frame["close"], previous_close)
-        frame["volume_change"] = frame.groupby("product", sort=False)["volume"].pct_change(fill_method=None)
-        frame["open_interest_change"] = frame.groupby("product", sort=False)["open_interest"].pct_change(fill_method=None)
-        # 对零分母、合约切换和异常跳变产生的 inf 统一交由缺失与 MAD 处理。
-        frame[["volume_change", "open_interest_change"]] = frame[
-            ["volume_change", "open_interest_change"]
-        ].replace([np.inf, -np.inf], np.nan)
-        return frame
 
-    def add_roll_yield_basis(self, frame: pd.DataFrame) -> pd.DataFrame:
-        """强制保留商品近远月展期收益/基差属性。"""
-        if "roll_yield" not in frame.columns:
-            raise KeyError("缺少 roll_yield：无法构建商品期限结构/基差特征")
-        frame["roll_yield"] = pd.to_numeric(frame["roll_yield"], errors="coerce")
-        return frame
+def causal_ffill_fundamentals(
+    features: pd.DataFrame,
+    registry: pd.DataFrame,
+    fundamental_names: Sequence[str],
+) -> Tuple[pd.DataFrame, Dict[str, int]]:
+    """只按品种向前填充低频基本面值；绝不使用 bfill。
 
-    @staticmethod
-    def _mad_zscore(series: pd.Series, mad_n: float) -> pd.Series:
-        values = series.replace([np.inf, -np.inf], np.nan).astype(float)
-        valid = values.dropna()
-        if len(valid) < 3:
-            return pd.Series(np.nan, index=series.index)
-        median = valid.median()
-        mad = (valid - median).abs().median()
-        if not np.isfinite(mad) or mad < 1e-12:
-            clipped = values.copy()
-        else:
-            scale = 1.4826 * mad
-            clipped = values.clip(median - mad_n * scale, median + mad_n * scale)
-        mean, std = clipped.mean(), clipped.std(ddof=0)
-        if not np.isfinite(std) or std < 1e-12:
-            result = pd.Series(np.nan, index=series.index)
-            result.loc[clipped.notna()] = 0.0
-            return result
-        return (clipped - mean) / std
+    交接包已把缺失填0，因此优先利用同一 source_factor 的 quality_flag 还原
+    缺失位置，再按 trade_date 升序 ffill，首个有效公布日前仍填0。
+    """
+    result = features.sort_values(["product", "trade_date"]).copy()
+    restored_missing = 0
+    filled_values = 0
+    for name in fundamental_names:
+        source = registry.loc[registry["feature_name"].eq(name), "source_factor"]
+        if source.empty:
+            continue
+        source_name = source.iloc[0]
+        flags = registry.loc[
+            registry.get("usage_type", pd.Series("", index=registry.index)).eq("quality_flag")
+            & registry["source_factor"].eq(source_name),
+            "feature_name",
+        ].tolist()
+        missing_mask = pd.Series(False, index=result.index)
+        for flag in flags:
+            if flag in result:
+                missing_mask |= result[flag].gt(0)
+        restored_missing += int(missing_mask.sum())
+        series = result[name].mask(missing_mask)
+        forwarded = series.groupby(result["product"], sort=False).ffill()
+        filled_values += int((series.isna() & forwarded.notna()).sum())
+        result[name] = forwarded.fillna(0.0)
+    return result, {"fundamental_missing_restored": restored_missing, "fundamental_values_ffilled": filled_values}
 
-    def transform(self, panel: pd.DataFrame) -> pd.DataFrame:
-        frame = self.add_raw_price_volume_features(panel)
-        frame = self.add_roll_yield_basis(frame)
-        frame["observation_no"] = frame.groupby("product").cumcount()
-        frame = frame[frame["observation_no"].ge(self.burn_in_days)].copy()
-        for factor in tqdm(FACTOR_COLS, desc="[Factors] 每日MAD/Z-Score", unit="特征"):
-            frame[factor] = frame.groupby("trade_date", group_keys=False)[factor].transform(
-                lambda s: self._mad_zscore(s, self.mad_n)
-            )
-        return frame.replace([np.inf, -np.inf], np.nan)
 
+def sector_neutralize_features(
+    features: pd.DataFrame,
+    continuous_names: Sequence[str],
+) -> pd.DataFrame:
+    """逐日逐板块减均值；quality_flag 不参与中性化。"""
+    result = features.copy()
+    group_keys = [result["trade_date"], result["sector"]]
+    for name in tqdm(continuous_names, desc="[Features] 行业中性化", unit="因子"):
+        result[name] = result[name] - result.groupby(group_keys, sort=False)[name].transform("mean")
+    return result
+
+
+def load_feature_handoff(root: Path, cfg: Config) -> Tuple[List[str], pd.DataFrame, Dict[str, object]]:
+    registry_path = find_handoff_file(root, cfg.feature_registry_path, "ml_feature_registry.csv")
+    matrix_path = find_handoff_file(root, cfg.feature_matrix_path, "ml_features_development.csv.gz")
+    print(f"[Features] registry={registry_path}", flush=True)
+    print(f"[Features] matrix={matrix_path}", flush=True)
+
+    registry = pd.read_csv(registry_path)
+    if "feature_name" not in registry.columns:
+        raise ValueError("ml_feature_registry.csv 缺少 feature_name 列")
+    feature_names = registry["feature_name"].dropna().astype(str).str.strip().tolist()
+    if not feature_names or len(feature_names) != len(set(feature_names)):
+        raise ValueError("feature_name 为空或存在重复")
+    if cfg.expected_feature_count and len(feature_names) != cfg.expected_feature_count:
+        raise ValueError(f"注册表特征数应为 {cfg.expected_feature_count}，实际为 {len(feature_names)}")
+
+    usecols = ["trade_date", "product", *feature_names]
+    features = pd.read_csv(matrix_path, usecols=usecols, parse_dates=["trade_date"], compression="infer")
+    features["product"] = features["product"].astype(str).str.upper().str.strip()
+    features = features[features["trade_date"].dt.year.between(cfg.data_start_year, cfg.data_end_year)].copy()
+    if features.duplicated(["trade_date", "product"]).any():
+        raise ValueError("ml_features_development.csv.gz 的 trade_date+product 不是唯一键")
+
+    expected_products = set(cfg.products)
+    available_products = set(features["product"].unique())
+    missing_products = sorted(expected_products - available_products)
+    unexpected_products = sorted(available_products - expected_products)
+    if missing_products:
+        raise ValueError(
+            "59因子矩阵未覆盖严格30品种池。缺失=" + str(missing_products)
+            + "；矩阵额外品种=" + str(unexpected_products)
+            + "。请补齐缺失品种特征后再训练，禁止静默替换或缩减品种池。"
+        )
+    features = features[features["product"].isin(cfg.products)].copy()
+    features["sector"] = features["product"].map(lambda p: PRODUCT_METADATA[p][0])
+
+    fundamental_names = identify_fundamental_features(registry)
+    features, ffill_report = causal_ffill_fundamentals(features, registry, fundamental_names)
+    quality_flags = registry.loc[
+        registry.get("usage_type", pd.Series("", index=registry.index)).eq("quality_flag"), "feature_name"
+    ].tolist()
+    continuous_names = [name for name in feature_names if name not in set(quality_flags)]
+    features = sector_neutralize_features(features, continuous_names)
+
+    features[feature_names] = features[feature_names].astype(np.float32)
+    values = features[feature_names].to_numpy(dtype=np.float32, copy=False)
+    if not np.isfinite(values).all():
+        raise ValueError("处理后的交接特征包含 NaN/inf")
+    report = {
+        "feature_registry_path": str(registry_path), "feature_matrix_path": str(matrix_path),
+        "registered_feature_count": len(feature_names), "feature_matrix_rows": len(features),
+        "feature_matrix_date_min": str(features["trade_date"].min().date()),
+        "feature_matrix_date_max": str(features["trade_date"].max().date()),
+        "feature_matrix_products": int(features["product"].nunique()),
+        "strict_product_pool": list(cfg.products), "missing_products": missing_products,
+        "unexpected_products_excluded": unexpected_products,
+        "sector_neutralized_feature_count": len(continuous_names),
+        "quality_flags_not_neutralized": len(quality_flags),
+        "fundamental_features_ffilled": fundamental_names,
+        **ffill_report,
+    }
+    return feature_names, features, report
+
+
+def merge_handoff_features(
+    panel: pd.DataFrame,
+    features: pd.DataFrame,
+    feature_names: Sequence[str],
+) -> Tuple[pd.DataFrame, Dict[str, object]]:
+    overlap = set(feature_names) & set(panel.columns)
+    if overlap:
+        panel = panel.drop(columns=sorted(overlap))
+    before = len(panel)
+    merged = panel.merge(
+        features[["trade_date", "product", *feature_names]],
+        on=["trade_date", "product"],
+        how="left",
+        validate="one_to_one",
+        indicator="_feature_merge",
+    )
+    matched = int(merged["_feature_merge"].eq("both").sum())
+    coverage = matched / before if before else 0.0
+    unmatched_by_year = (
+        merged.loc[merged["_feature_merge"].ne("both"), "trade_date"].dt.year.value_counts().sort_index().to_dict()
+    )
+    merged = merged.drop(columns="_feature_merge")
+    # 交接包只到2024；2025无特征的行自然不能构造模型样本，但仍保留面板供审计。
+    report = {
+        "panel_rows_before_feature_merge": before,
+        "feature_rows_matched": matched,
+        "feature_merge_coverage": coverage,
+        "unmatched_feature_rows_by_year": {str(k): int(v) for k, v in unmatched_by_year.items()},
+    }
+    print(f"[Features] left merge 覆盖率={coverage:.2%} ({matched:,}/{before:,})", flush=True)
+    return merged, report
+
+
+def resolve_feature_mode(root: Path, cfg: Config) -> str:
+    mode = cfg.feature_mode
+    if mode not in {"auto", "integrated", "handoff"}:
+        raise ValueError("feature_mode 必须是 auto、integrated 或 handoff")
+    if mode == "auto":
+        return "integrated" if find_integrated_market_file(root, cfg) is not None else "handoff"
+    if mode == "integrated" and find_integrated_market_file(root, cfg) is None:
+        raise FileNotFoundError("feature_mode=integrated，但没有找到整合合约日表")
+    return mode
+
+
+def build_integrated_features(panel: pd.DataFrame) -> Tuple[List[str], pd.DataFrame, Dict[str, object]]:
+    """从整合合约日表的因果主力面板重建 59 个可训练特征。
+
+    连续特征只使用决策日及更早数据，先按品种做时间序列变换，再逐交易日
+    做 MAD 稳健标准化和行业去均值。低频字段会结合 age_days 屏蔽陈旧值；
+    缺失位置以独立质量标志保留，标准化值最终填 0。
+    """
+    frame = panel.sort_values(["product", "trade_date"]).copy()
+    frame["sector"] = frame["product"].map(lambda p: PRODUCT_METADATA[p][0])
+    grouped = frame.groupby("product", sort=False)
+
+    def gpct(column: str, periods: int) -> pd.Series:
+        if column not in frame:
+            return pd.Series(np.nan, index=frame.index, dtype=float)
+        return grouped[column].transform(lambda s: s.pct_change(periods, fill_method=None))
+
+    def gdiff(column: str, periods: int = 1) -> pd.Series:
+        if column not in frame:
+            return pd.Series(np.nan, index=frame.index, dtype=float)
+        return grouped[column].transform(lambda s: s.diff(periods))
+
+    def rolling_stat(series: pd.Series, window: int, statistic: str, min_periods: Optional[int] = None) -> pd.Series:
+        minimum = min_periods or max(3, window // 2)
+        by_product = series.groupby(frame["product"], sort=False)
+        if statistic == "std":
+            return by_product.transform(lambda s: s.rolling(window, min_periods=minimum).std())
+        if statistic == "skew":
+            return by_product.transform(lambda s: s.rolling(window, min_periods=minimum).skew())
+        if statistic == "sum":
+            return by_product.transform(lambda s: s.rolling(window, min_periods=minimum).sum())
+        if statistic == "mean":
+            return by_product.transform(lambda s: s.rolling(window, min_periods=minimum).mean())
+        raise ValueError(f"不支持的 rolling statistic: {statistic}")
+
+    def rolling_z(series: pd.Series, window: int = 60) -> pd.Series:
+        mean = rolling_stat(series, window, "mean")
+        std = rolling_stat(series, window, "std")
+        return (series - mean) / std.where(std.gt(1e-12))
+
+    def fresh(column: str, age_column: str, max_age: int) -> pd.Series:
+        if column not in frame:
+            return pd.Series(np.nan, index=frame.index, dtype=float)
+        value = pd.to_numeric(frame[column], errors="coerce")
+        if age_column in frame:
+            age = pd.to_numeric(frame[age_column], errors="coerce")
+            value = value.mask(age.gt(max_age))
+        return value
+
+    close = pd.to_numeric(frame["close"], errors="coerce")
+    ret1 = gpct("close", 1)
+    abs_move = ret1.abs()
+    log_volume = np.log1p(pd.to_numeric(frame.get("volume"), errors="coerce").clip(lower=0))
+    log_oi = np.log1p(pd.to_numeric(frame.get("open_interest"), errors="coerce").clip(lower=0))
+
+    continuous: Dict[str, pd.Series] = {
+        "return_1": ret1,
+        "momentum_5": gpct("close", 5),
+        "momentum_10": gpct("close", 10),
+        "momentum_20": gpct("close", 20),
+        "momentum_60": gpct("close", 60),
+        "momentum_120": gpct("close", 120),
+    }
+    for window in (20, 60, 120):
+        numerator = gpct("close", window).abs()
+        denominator = rolling_stat(abs_move, window, "sum", max(5, window // 2))
+        continuous[f"trend_efficiency_{window}"] = numerator / denominator.where(denominator.gt(1e-12))
+    for window in (5, 10, 20, 60, 120):
+        continuous[f"realized_vol_{window}"] = rolling_stat(ret1, window, "std") * np.sqrt(252.0)
+    downside = ret1.where(ret1.lt(0), 0.0)
+    continuous.update({
+        "downside_vol_20": rolling_stat(downside, 20, "std") * np.sqrt(252.0),
+        "realized_skew_20": rolling_stat(ret1, 20, "skew"),
+        "realized_skew_60": rolling_stat(ret1, 60, "skew"),
+        "high_low_range": (frame["high"] - frame["low"]) / close.where(close.gt(0)),
+        "candle_body": (frame["close"] - frame["open"]) / frame["open"].where(frame["open"].gt(0)),
+        "close_settle_spread": (frame["close"] - frame["settle"]) / frame["settle"].where(frame["settle"].gt(0)),
+        "log_volume": log_volume,
+        "volume_change_1": gpct("volume", 1),
+        "volume_change_5": gpct("volume", 5),
+        "volume_z_20": rolling_z(log_volume, 20),
+        "volume_z_60": rolling_z(log_volume, 60),
+        "log_open_interest": log_oi,
+        "oi_change_1": gpct("open_interest", 1),
+        "oi_change_5": gpct("open_interest", 5),
+        "oi_z_20": rolling_z(log_oi, 20),
+        "oi_z_60": rolling_z(log_oi, 60),
+        "volume_oi_turnover": frame["volume"] / frame["open_interest"].where(frame["open_interest"].gt(0)),
+    })
+    amount = pd.to_numeric(frame.get("amount"), errors="coerce")
+    amihud_daily = ret1.abs() / amount.where(amount.gt(0))
+    continuous["amihud_20"] = rolling_stat(amihud_daily, 20, "mean")
+
+    roll = pd.to_numeric(frame.get("roll_yield"), errors="coerce")
+    continuous.update({
+        "roll_yield": roll,
+        "roll_change_5": roll.groupby(frame["product"], sort=False).transform(lambda s: s.diff(5)),
+        "roll_change_20": roll.groupby(frame["product"], sort=False).transform(lambda s: s.diff(20)),
+    })
+
+    spot = fresh("spot", "spot_age", 30)
+    continuous["spot_momentum_5"] = spot.groupby(frame["product"], sort=False).transform(
+        lambda s: s.pct_change(5, fill_method=None)
+    )
+    continuous["spot_momentum_20"] = spot.groupby(frame["product"], sort=False).transform(
+        lambda s: s.pct_change(20, fill_method=None)
+    )
+
+    warehouse = fresh("warehouse_receipt", "warehouse_receipt_age", 45)
+    stock = fresh("stock", "stock_age", 60)
+    available_stock = fresh("available_stock", "available_stock_age", 60)
+    for prefix, series in (("warehouse", warehouse), ("stock", stock), ("available_stock", available_stock)):
+        continuous[f"{prefix}_level"] = rolling_z(np.log1p(series.clip(lower=0)), 60)
+        continuous[f"{prefix}_change_5"] = series.groupby(frame["product"], sort=False).transform(
+            lambda s: s.pct_change(5, fill_method=None)
+        )
+    # 为仓单与库存分别保留一个更短周期的供需冲击，共计 45 个连续特征。
+    continuous["warehouse_change_1"] = warehouse.groupby(frame["product"], sort=False).transform(
+        lambda s: s.pct_change(1, fill_method=None)
+    )
+    continuous["stock_change_1"] = stock.groupby(frame["product"], sort=False).transform(
+        lambda s: s.pct_change(1, fill_method=None)
+    )
+
+    if len(continuous) != 45:
+        raise AssertionError(f"整合表连续特征设计应为45个，实际为{len(continuous)}个")
+    quality_bases = [
+        "momentum_120", "trend_efficiency_120", "realized_vol_120", "realized_skew_60",
+        "amihud_20", "roll_yield", "spot_momentum_20", "warehouse_level",
+        "warehouse_change_5", "stock_level", "stock_change_5", "available_stock_level",
+        "available_stock_change_5", "volume_oi_turnover",
+    ]
+
+    continuous_frame = pd.DataFrame({
+        name: pd.to_numeric(values, errors="coerce").replace([np.inf, -np.inf], np.nan)
+        for name, values in continuous.items()
+    }, index=frame.index)
+    raw_missing = continuous_frame.isna()
+
+    # 向量化逐日 MAD 稳健标准化，避免 45 个特征逐日执行 Python 回调。
+    date_keys = frame["trade_date"]
+    daily_median = continuous_frame.groupby(date_keys, sort=False).transform("median")
+    absolute_deviation = (continuous_frame - daily_median).abs()
+    daily_mad = absolute_deviation.groupby(date_keys, sort=False).transform("median")
+    daily_std = continuous_frame.groupby(date_keys, sort=False).transform("std")
+    scale = (1.4826 * daily_mad).where(daily_mad.gt(1e-12), daily_std)
+    scale = scale.where(scale.gt(1e-12))
+    standardized_frame = ((continuous_frame - daily_median) / scale).clip(-8.0, 8.0)
+    sector_keys = [frame["trade_date"], frame["sector"]]
+    standardized_frame = standardized_frame - standardized_frame.groupby(
+        sector_keys, sort=False
+    ).transform("mean")
+
+    output = frame[["trade_date", "product", "sector"]].copy()
+    feature_names: List[str] = []
+    for name in continuous:
+        feature_name = f"{name}__cs_robust_z"
+        output[feature_name] = standardized_frame[name].fillna(0.0).astype(np.float32)
+        feature_names.append(feature_name)
+
+    for name in quality_bases:
+        feature_name = f"{name}__missing"
+        output[feature_name] = raw_missing[name].astype(np.float32)
+        feature_names.append(feature_name)
+
+    if len(feature_names) != 59 or output.duplicated(["trade_date", "product"]).any():
+        raise AssertionError("整合表特征必须恰为59列且 trade_date+product 唯一")
+    values = output[feature_names].to_numpy(dtype=np.float32, copy=False)
+    if not np.isfinite(values).all():
+        raise ValueError("整合表生成的特征仍包含 NaN/inf")
+    report = {
+        "feature_mode": "integrated",
+        "registered_feature_count": len(feature_names),
+        "feature_matrix_rows": len(output),
+        "feature_matrix_date_min": str(output["trade_date"].min().date()),
+        "feature_matrix_date_max": str(output["trade_date"].max().date()),
+        "feature_matrix_products": int(output["product"].nunique()),
+        "strict_product_pool": sorted(output["product"].unique().tolist()),
+        "feature_note": "由整合合约日表的因果主力面板重建；45个连续特征+14个缺失质量标志",
+    }
+    return feature_names, output, report
 
 
 # =============================================================================
@@ -731,8 +1085,9 @@ class FactorEngine:
 
 
 class NumpySequenceDataset(Dataset):
-    def __init__(self, x: np.ndarray, y_reg: np.ndarray, y_cls: np.ndarray, indices: np.ndarray):
+    def __init__(self, x: np.ndarray, product_ids: np.ndarray, y_reg: np.ndarray, y_cls: np.ndarray, indices: np.ndarray):
         self.x = x
+        self.product_ids = product_ids
         self.y_reg = y_reg
         self.y_cls = y_cls
         self.indices = np.asarray(indices, dtype=np.int64)
@@ -740,10 +1095,11 @@ class NumpySequenceDataset(Dataset):
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         j = self.indices[idx]
         return (
             torch.from_numpy(self.x[j]),
+            torch.tensor(self.product_ids[j], dtype=torch.long),
             torch.tensor(self.y_cls[j], dtype=torch.float32),
             torch.tensor(self.y_reg[j], dtype=torch.float32),
         )
@@ -778,6 +1134,8 @@ def build_sequences(
             ys.append(float(current["target_excess"]))
             metadata.append({
                 "product": product,
+                "product_id": PRODUCT_TO_ID[product],
+                "sector": PRODUCT_METADATA[product][0],
                 "decision_date": current["trade_date"],
                 "sample_date": current["sample_date"],
                 "exit_date": current["exit_date"],
@@ -816,6 +1174,8 @@ class FuturesCNN1D(nn.Module):
         attention_heads: int = 4,
         transformer_ff_dim: int = 96,
         transformer_layers: int = 1,
+        num_products: int = 30,
+        product_embedding_dim: int = 8,
     ):
         super().__init__()
         if model_dim % attention_heads != 0:
@@ -825,6 +1185,8 @@ class FuturesCNN1D(nn.Module):
             nn.GELU(),
             nn.Dropout(dropout),
         )
+        self.product_embedding = nn.Embedding(num_products, product_embedding_dim)
+        self.product_fusion = nn.Linear(model_dim + product_embedding_dim, model_dim)
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=model_dim,
             nhead=attention_heads,
@@ -854,9 +1216,17 @@ class FuturesCNN1D(nn.Module):
             if module.bias is not None:
                 nn.init.zeros_(module.bias)
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        x: torch.Tensor,
+        product_ids: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         x = self.local_embedding(x)      # [B, D, T]
         x = x.transpose(1, 2)            # [B, T, D]
+        if product_ids is None:
+            product_ids = torch.zeros(x.shape[0], dtype=torch.long, device=x.device)
+        product_context = self.product_embedding(product_ids).unsqueeze(1).expand(-1, x.shape[1], -1)
+        x = self.product_fusion(torch.cat([x, product_context], dim=-1))
         x = self.transformer(x)          # 全局20日时序依赖
         shared = self.shared_dropout(self.shared_norm(x.mean(dim=1)))
         logits = self.cls_head(shared).squeeze(-1)
@@ -874,13 +1244,14 @@ class FuturesCNN1D(nn.Module):
 
 def make_loader(
     x: np.ndarray,
+    product_ids: np.ndarray,
     y_reg: np.ndarray,
     y_cls: np.ndarray,
     indices: np.ndarray,
     cfg: Config,
 ) -> DataLoader:
     return DataLoader(
-        NumpySequenceDataset(x, y_reg, y_cls, indices),
+        NumpySequenceDataset(x, product_ids, y_reg, y_cls, indices),
         batch_size=cfg.batch_size,
         shuffle=False,  # 明确禁止乱序
         num_workers=cfg.num_workers,
@@ -914,9 +1285,11 @@ def evaluate_loss(
 ) -> Tuple[float, float, float]:
     model.eval(); totals: List[float] = []; cls_values: List[float] = []; reg_values: List[float] = []; counts: List[int] = []
     with torch.no_grad():
-        for xb, y_cls, y_reg in loader:
-            xb, y_cls, y_reg = xb.to(device), y_cls.to(device), y_reg.to(device)
-            logits, reg_out = model(xb)
+        for xb, product_id, y_cls, y_reg in loader:
+            xb = xb.to(device)
+            product_id = product_id.to(device)
+            y_cls, y_reg = y_cls.to(device), y_reg.to(device)
+            logits, reg_out = model(xb, product_id)
             total, cls_loss, reg_loss = combined_multitask_loss(logits, reg_out, y_cls, y_reg, alpha, bce, huber)
             totals.append(float(total.item())); cls_values.append(float(cls_loss.item())); reg_values.append(float(reg_loss.item())); counts.append(len(y_reg))
     if not totals:
@@ -953,6 +1326,7 @@ def fit_with_validation(
     x: np.ndarray,
     y_reg: np.ndarray,
     y_cls: np.ndarray,
+    product_ids: np.ndarray,
     fit_idx: np.ndarray,
     val_idx: np.ndarray,
     cfg: Config,
@@ -962,16 +1336,18 @@ def fit_with_validation(
     model = make_multitask_model(x.shape[1], cfg).to(cfg.device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     bce = nn.BCEWithLogitsLoss(); huber = nn.HuberLoss(delta=cfg.huber_delta)
-    fit_loader = make_loader(x, y_reg, y_cls, fit_idx, cfg)
-    val_loader = make_loader(x, y_reg, y_cls, val_idx, cfg)
+    fit_loader = make_loader(x, product_ids, y_reg, y_cls, fit_idx, cfg)
+    val_loader = make_loader(x, product_ids, y_reg, y_cls, val_idx, cfg)
     history: List[Dict[str, float]] = []; best_state = copy.deepcopy(model.state_dict())
     best_val = float("inf"); best_epoch = 1; stale = 0
     for epoch in range(1, cfg.max_epochs + 1):
         model.train(); totals: List[float] = []; cls_values: List[float] = []; reg_values: List[float] = []; counts: List[int] = []
-        for xb, batch_cls, batch_reg in fit_loader:
-            xb, batch_cls, batch_reg = xb.to(cfg.device), batch_cls.to(cfg.device), batch_reg.to(cfg.device)
+        for xb, product_id, batch_cls, batch_reg in fit_loader:
+            xb = xb.to(cfg.device)
+            product_id = product_id.to(cfg.device)
+            batch_cls, batch_reg = batch_cls.to(cfg.device), batch_reg.to(cfg.device)
             optimizer.zero_grad(set_to_none=True)
-            logits, reg_out = model(xb)
+            logits, reg_out = model(xb, product_id)
             total, cls_loss, reg_loss = combined_multitask_loss(
                 logits, reg_out, batch_cls, batch_reg, cfg.multitask_alpha, bce, huber
             )
@@ -994,6 +1370,7 @@ def refit_for_epochs(
     x: np.ndarray,
     y_reg: np.ndarray,
     y_cls: np.ndarray,
+    product_ids: np.ndarray,
     train_idx: np.ndarray,
     epochs: int,
     cfg: Config,
@@ -1002,24 +1379,33 @@ def refit_for_epochs(
     set_seed(fold_seed); model = make_multitask_model(x.shape[1], cfg).to(cfg.device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate, weight_decay=cfg.weight_decay)
     bce = nn.BCEWithLogitsLoss(); huber = nn.HuberLoss(delta=cfg.huber_delta)
-    loader = make_loader(x, y_reg, y_cls, train_idx, cfg)
+    loader = make_loader(x, product_ids, y_reg, y_cls, train_idx, cfg)
     for _ in tqdm(range(max(1, epochs)), desc="[Refit] 多任务完整训练窗", unit="epoch"):
         model.train()
-        for xb, batch_cls, batch_reg in loader:
-            xb, batch_cls, batch_reg = xb.to(cfg.device), batch_cls.to(cfg.device), batch_reg.to(cfg.device)
-            optimizer.zero_grad(set_to_none=True); logits, reg_out = model(xb)
+        for xb, product_id, batch_cls, batch_reg in loader:
+            xb = xb.to(cfg.device)
+            product_id = product_id.to(cfg.device)
+            batch_cls, batch_reg = batch_cls.to(cfg.device), batch_reg.to(cfg.device)
+            optimizer.zero_grad(set_to_none=True); logits, reg_out = model(xb, product_id)
             total, _, _ = combined_multitask_loss(logits, reg_out, batch_cls, batch_reg, cfg.multitask_alpha, bce, huber)
             total.backward(); nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0); optimizer.step()
     return model
 
 
-def predict(model: nn.Module, x: np.ndarray, indices: np.ndarray, cfg: Config) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    dummy = np.zeros(len(x), dtype=np.float32); loader = make_loader(x, dummy, dummy, indices, cfg)
+def predict(
+    model: nn.Module,
+    x: np.ndarray,
+    product_ids: np.ndarray,
+    indices: np.ndarray,
+    cfg: Config,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    dummy = np.zeros(len(x), dtype=np.float32)
+    loader = make_loader(x, product_ids, dummy, dummy, indices, cfg)
     probabilities: List[np.ndarray] = []; regressions: List[np.ndarray] = []
     model.eval()
     with torch.no_grad():
-        for xb, _, _ in loader:
-            logits, reg_out = model(xb.to(cfg.device))
+        for xb, product_id, _, _ in loader:
+            logits, reg_out = model(xb.to(cfg.device), product_id.to(cfg.device))
             probabilities.append(torch.sigmoid(logits).cpu().numpy()); regressions.append(reg_out.cpu().numpy())
     if not probabilities:
         empty = np.array([], dtype=float); return empty, empty, empty
@@ -1050,13 +1436,14 @@ def permutation_importance(
     model: nn.Module,
     x: np.ndarray,
     y: np.ndarray,
+    product_ids: np.ndarray,
     indices: np.ndarray,
     cfg: Config,
     seed: int,
 ) -> np.ndarray:
     if len(indices) == 0:
         return np.zeros(x.shape[1])
-    base_pred, _, _ = predict(model, x, indices, cfg)
+    base_pred, _, _ = predict(model, x, product_ids, indices, cfg)
     base_mse = float(np.mean((base_pred - y[indices]) ** 2))
     rng = np.random.default_rng(seed)
     importance = np.zeros(x.shape[1], dtype=float)
@@ -1064,7 +1451,9 @@ def permutation_importance(
         perturbed = x[indices].copy()
         order = rng.permutation(len(indices))
         perturbed[:, factor_idx, :] = perturbed[order, factor_idx, :]
-        perm_pred, _, _ = predict(model, perturbed, np.arange(len(indices)), cfg)
+        perm_pred, _, _ = predict(
+            model, perturbed, product_ids[indices], np.arange(len(indices)), cfg
+        )
         importance[factor_idx] = max(0.0, float(np.mean((perm_pred - y[indices]) ** 2)) - base_mse)
     return importance
 
@@ -1074,6 +1463,7 @@ def walk_forward(
     y: np.ndarray,
     meta: pd.DataFrame,
     cfg: Config,
+    factor_names: Sequence[str],
 ) -> Tuple[pd.DataFrame, pd.DataFrame, np.ndarray, Dict[str, object]]:
     predictions: List[pd.DataFrame] = []
     histories: List[pd.DataFrame] = []
@@ -1083,6 +1473,7 @@ def walk_forward(
 
     sample_year = meta["sample_date"].dt.year
     y_cls = meta["target_label"].to_numpy(dtype=np.float32)
+    product_ids = meta["product_id"].to_numpy(dtype=np.int64)
     for test_year in range(cfg.first_test_year, cfg.last_test_year + 1):
         # Expanding Window：训练起点固定为 2015，终点随测试年向前扩展。
         train_start = cfg.train_start_year
@@ -1110,10 +1501,12 @@ def walk_forward(
         )
         fold_seed = cfg.seed + test_year
         _, history, best_epoch, best_val = fit_with_validation(
-            x, y, y_cls, fit_idx, val_idx, cfg, fold_seed
+            x, y, y_cls, product_ids, fit_idx, val_idx, cfg, fold_seed
         )
-        model = refit_for_epochs(x, y, y_cls, train_idx_sampled, best_epoch, cfg, fold_seed)
-        test_pred, test_prob, test_reg = predict(model, x, test_idx, cfg)
+        model = refit_for_epochs(
+            x, y, y_cls, product_ids, train_idx_sampled, best_epoch, cfg, fold_seed
+        )
+        test_pred, test_prob, test_reg = predict(model, x, product_ids, test_idx, cfg)
 
         fold_pred = meta.iloc[test_idx].copy()
         fold_pred["prediction"] = test_pred
@@ -1127,14 +1520,14 @@ def walk_forward(
         fold_history = pd.DataFrame(history)
         fold_history["test_year"] = test_year
         histories.append(fold_history)
-        importances.append(permutation_importance(model, x, y, test_idx, cfg, fold_seed))
+        importances.append(permutation_importance(model, x, y, product_ids, test_idx, cfg, fold_seed))
 
         if best_val < best_global_val:
             best_global_val = best_val
             best_checkpoint = {
                 "model_state_dict": {k: v.detach().cpu() for k, v in model.state_dict().items()},
                 "config": asdict(cfg),
-                "factor_names": FACTOR_COLS,
+                "factor_names": list(factor_names),
                 "test_year": test_year,
                 "train_years": [train_start, test_year - 1],
                 "training_scheme": "expanding_window",
@@ -1144,7 +1537,7 @@ def walk_forward(
                 "model_class": "ConvTransformerDualHead",
                 "multitask_alpha": cfg.multitask_alpha,
                 "train_date_stride": cfg.train_date_stride,
-                "input_shape": [len(FACTOR_COLS), cfg.sequence_length],
+                "input_shape": [len(factor_names), cfg.sequence_length],
             }
 
         print(
@@ -1453,6 +1846,343 @@ def make_metrics_table(daily: pd.DataFrame, cfg: Config) -> pd.DataFrame:
 
 
 # =============================================================================
+# 7.1 只读评价与审计层：不改变模型、信号、持仓或原回测结果
+# =============================================================================
+
+
+def safe_correlation(x: pd.Series, y: pd.Series, rank: bool = False) -> float:
+    pair = pd.concat([pd.to_numeric(x, errors="coerce"), pd.to_numeric(y, errors="coerce")], axis=1).dropna()
+    if len(pair) < 3 or pair.iloc[:, 0].nunique() < 2 or pair.iloc[:, 1].nunique() < 2:
+        return np.nan
+    if rank:
+        pair = pair.rank(method="average")
+    return float(pair.iloc[:, 0].corr(pair.iloc[:, 1]))
+
+
+def calculate_daily_ic(
+    predictions: pd.DataFrame,
+    signal_col: str = "prediction",
+    target_col: str = "target_excess",
+) -> pd.DataFrame:
+    columns = ["date", "pearson_ic", "rank_ic", "n_assets", "signal_column", "target_column"]
+    if predictions.empty or not {"sample_date", signal_col, target_col}.issubset(predictions.columns):
+        return pd.DataFrame(columns=columns)
+    rows: List[Dict[str, object]] = []
+    for date, day in predictions.groupby("sample_date", sort=True):
+        valid = day[[signal_col, target_col]].replace([np.inf, -np.inf], np.nan).dropna()
+        rows.append({
+            "date": date,
+            "pearson_ic": safe_correlation(valid[signal_col], valid[target_col]),
+            "rank_ic": safe_correlation(valid[signal_col], valid[target_col], rank=True),
+            "n_assets": len(valid),
+            "signal_column": signal_col,
+            "target_column": target_col,
+        })
+    return pd.DataFrame(rows)
+
+
+def hac_mean_test(values: pd.Series, max_lag: Optional[int] = None) -> Dict[str, float]:
+    """Newey-West/Bartlett HAC：检验日度序列均值是否为0。"""
+    x = pd.Series(values).replace([np.inf, -np.inf], np.nan).dropna().to_numpy(dtype=float)
+    n = len(x)
+    if n < 3:
+        return {"mean": np.nan, "hac_standard_error": np.nan, "t_stat": np.nan, "p_value": np.nan, "hac_lag": np.nan}
+    lag = int(np.floor(4.0 * (n / 100.0) ** (2.0 / 9.0))) if max_lag is None else int(max_lag)
+    lag = max(0, min(lag, n - 1))
+    centered = x - x.mean()
+    long_run_variance = float(np.dot(centered, centered) / n)
+    for k in range(1, lag + 1):
+        covariance = float(np.dot(centered[k:], centered[:-k]) / n)
+        long_run_variance += 2.0 * (1.0 - k / (lag + 1.0)) * covariance
+    standard_error = math.sqrt(max(long_run_variance, 0.0) / n)
+    t_stat = float(x.mean() / standard_error) if standard_error > 1e-15 else np.nan
+    # 大样本正态近似双侧 p 值，不新增 scipy 硬依赖。
+    p_value = float(math.erfc(abs(t_stat) / math.sqrt(2.0))) if np.isfinite(t_stat) else np.nan
+    return {
+        "mean": float(x.mean()), "hac_standard_error": standard_error,
+        "t_stat": t_stat, "p_value": p_value, "hac_lag": lag,
+    }
+
+
+def circular_block_bootstrap_mean_ci(
+    values: pd.Series,
+    block_length: int = 20,
+    n_bootstrap: int = 1000,
+    seed: int = 42,
+) -> Dict[str, float]:
+    """固定随机种子的圆形块自助法均值95%区间，仅用于结果审计。"""
+    x = pd.Series(values).replace([np.inf, -np.inf], np.nan).dropna().to_numpy(dtype=float)
+    n = len(x)
+    if n < 3:
+        return {"bootstrap_mean": np.nan, "ci_lower": np.nan, "ci_upper": np.nan}
+    block = max(1, min(int(block_length), n))
+    blocks_needed = int(math.ceil(n / block))
+    offsets = np.arange(block)
+    rng = np.random.default_rng(seed)
+    estimates = np.empty(n_bootstrap, dtype=float)
+    for i in range(n_bootstrap):
+        starts = rng.integers(0, n, size=blocks_needed)
+        indices = ((starts[:, None] + offsets[None, :]) % n).ravel()[:n]
+        estimates[i] = float(x[indices].mean())
+    lower, upper = np.quantile(estimates, [0.025, 0.975])
+    return {"bootstrap_mean": float(estimates.mean()), "ci_lower": float(lower), "ci_upper": float(upper)}
+
+
+def quantile_spread_and_monotonicity(
+    frame: pd.DataFrame,
+    signal_col: str,
+    target_col: str,
+    groups: int = 5,
+) -> Tuple[pd.DataFrame, Dict[str, float]]:
+    """按日分组后汇总收益；单调性=相邻组平均收益严格递增的比例。"""
+    records: List[pd.DataFrame] = []
+    spread_rows: List[Dict[str, object]] = []
+    for date, day in frame.groupby("sample_date", sort=True):
+        valid = day[[signal_col, target_col]].replace([np.inf, -np.inf], np.nan).dropna().copy()
+        if len(valid) < groups or valid[signal_col].nunique() < groups:
+            continue
+        ranked = valid[signal_col].rank(method="first")
+        valid["quantile_group"] = pd.qcut(ranked, groups, labels=False, duplicates="drop") + 1
+        group_return = valid.groupby("quantile_group", as_index=False)[target_col].mean()
+        group_return["date"] = date
+        records.append(group_return)
+        if group_return["quantile_group"].nunique() == groups:
+            ordered = group_return.sort_values("quantile_group")[target_col].to_numpy(dtype=float)
+            spread_rows.append({"date": date, "quantile_spread": ordered[-1] - ordered[0]})
+    if not records:
+        empty = pd.DataFrame(columns=["quantile_group", target_col, "date"])
+        return empty, {"monotonicity": np.nan, "quantile_spread_mean": np.nan}
+    grouped = pd.concat(records, ignore_index=True)
+    average_by_group = grouped.groupby("quantile_group")[target_col].mean().sort_index()
+    differences = np.diff(average_by_group.to_numpy(dtype=float))
+    monotonicity = float((differences > 0).mean()) if len(differences) else np.nan
+    spread = pd.DataFrame(spread_rows)
+    return grouped, {
+        "monotonicity": monotonicity,
+        "quantile_spread_mean": float(spread["quantile_spread"].mean()) if not spread.empty else np.nan,
+    }
+
+
+def add_forward_horizon_returns(predictions: pd.DataFrame, horizons: Sequence[int] = (1, 5, 20)) -> pd.DataFrame:
+    """从OOS逐日可交易收益构造展示用前向持有期收益，不参与训练或原策略。"""
+    result = predictions.sort_values(["product", "sample_date"]).copy()
+    result["audit_return_1d"] = result["raw_return"]
+    result["audit_return_5d"] = result["forward_5d_return"]
+    if 20 in horizons:
+        values = np.full(len(result), np.nan, dtype=float)
+        for _, positions in result.groupby("product", sort=False).indices.items():
+            positions = np.asarray(positions, dtype=int)
+            returns = result.iloc[positions]["raw_return"].to_numpy(dtype=float)
+            dates = pd.to_datetime(result.iloc[positions]["sample_date"]).to_numpy()
+            for i in range(0, len(positions) - 20 + 1):
+                window = returns[i:i + 20]
+                calendar_gap = (pd.Timestamp(dates[i + 19]) - pd.Timestamp(dates[i])).days
+                if np.isfinite(window).all() and calendar_gap <= 45:
+                    values[positions[i]] = float(np.prod(1.0 + window) - 1.0)
+        result["audit_return_20d"] = values
+    return result
+
+
+def summarize_ic_scope(
+    frame: pd.DataFrame,
+    scope: str,
+    signal_col: str,
+    target_col: str,
+) -> Dict[str, object]:
+    daily_ic = calculate_daily_ic(frame, signal_col, target_col)
+    valid_pearson = daily_ic["pearson_ic"].dropna()
+    valid_rank = daily_ic["rank_ic"].dropna()
+    return {
+        "scope": scope,
+        "signal_column": signal_col,
+        "target_column": target_col,
+        "observations": int(len(valid_pearson)),
+        "calendar_dates_considered": int(len(daily_ic)),
+        "ic_mean": float(valid_pearson.mean()),
+        "rank_ic": float(valid_rank.mean()),
+        "ic_std": float(valid_pearson.std(ddof=1)),
+        "rank_ic_std": float(valid_rank.std(ddof=1)),
+    }
+
+
+def build_evaluation_audit(
+    predictions: pd.DataFrame,
+    daily: pd.DataFrame,
+    panel: pd.DataFrame,
+    cfg: Config,
+) -> Dict[str, object]:
+    """生成统一结果展示和稳健性审计；所有输入均为既有模型的既有OOS结果。"""
+    pred = add_forward_horizon_returns(predictions)
+    ic_daily = calculate_daily_ic(pred, "prediction", "target_excess")
+    rank_ic_by_year = (
+        ic_daily.assign(year=pd.to_datetime(ic_daily["date"]).dt.year)
+        .groupby("year", as_index=False)
+        .agg(rank_ic=("rank_ic", "mean"), pearson_ic=("pearson_ic", "mean"),
+             rank_ic_std=("rank_ic", "std"), observations=("rank_ic", "count"))
+    )
+
+    cost_rows: List[Dict[str, object]] = []
+    audit_returns: Dict[int, pd.Series] = {}
+    for bps in (0, 3, 5, 10):
+        fee = bps / 10000.0
+        returns = daily["gross_return"] - fee * daily["absolute_traded"]
+        audit_returns[bps] = returns
+        metrics = performance_metrics(returns, cfg.annualization)
+        annual_return = metrics.get("annual_return", np.nan)
+        max_drawdown = metrics.get("max_drawdown", np.nan)
+        calmar = annual_return / abs(max_drawdown) if np.isfinite(max_drawdown) and abs(max_drawdown) > 1e-12 else np.nan
+        cost_rows.append({
+            "scenario": f"{bps}bps_one_way", "one_way_fee_bps": bps,
+            "factor_return": metrics.get("total_return", np.nan),
+            "annual_return": annual_return, "annual_volatility": metrics.get("annual_volatility", np.nan),
+            "sharpe": metrics.get("sharpe_ratio", np.nan), "max_drawdown": max_drawdown,
+            "calmar": calmar, "turnover": float(daily["turnover"].mean()),
+            "observations": len(returns),
+        })
+    cost_scenarios = pd.DataFrame(cost_rows)
+
+    # 主文统计对象：统一执行口径下3bps日度多空收益。
+    base_returns = audit_returns[3]
+    return_hac = hac_mean_test(base_returns)
+    return_bootstrap = circular_block_bootstrap_mean_ci(base_returns, seed=cfg.seed)
+    ic_hac = hac_mean_test(ic_daily["pearson_ic"])
+    ic_bootstrap = circular_block_bootstrap_mean_ci(ic_daily["pearson_ic"], seed=cfg.seed + 1)
+    statistical_tests = pd.DataFrame([
+        {"test_object": "daily_long_short_return_3bps", **return_hac, **return_bootstrap,
+         "bootstrap_block_length": 20, "bootstrap_replications": 1000},
+        {"test_object": "daily_pearson_ic_5d", **ic_hac, **ic_bootstrap,
+         "bootstrap_block_length": 20, "bootstrap_replications": 1000},
+    ])
+
+    quantile_returns, monotonicity_result = quantile_spread_and_monotonicity(
+        pred, "prediction", "target_excess", groups=5
+    )
+    grouped_return_summary = (
+        quantile_returns.groupby("quantile_group", as_index=False)["target_excess"].mean()
+        .rename(columns={"target_excess": "mean_realized_excess_return"})
+    )
+    grouped_return_summary["method"] = "daily_prediction_quintiles; monotonicity=positive_adjacent_mean_return_differences/4"
+    grouped_return_summary["monotonicity"] = monotonicity_result["monotonicity"]
+    grouped_return_summary["quantile_spread_mean"] = monotonicity_result["quantile_spread_mean"]
+
+    base_metrics = cost_scenarios.loc[cost_scenarios["one_way_fee_bps"].eq(3)].iloc[0]
+    valid_ic = ic_daily["pearson_ic"].dropna()
+    valid_rank_ic = ic_daily["rank_ic"].dropna()
+    ic_mean = float(valid_ic.mean())
+    ic_std = float(valid_ic.std(ddof=1))
+    unified_panel = pd.DataFrame([{
+        "model": "ConvTransformerDualHead",
+        "execution_scenario": "3bps_one_way",
+        "factor_return": base_metrics["factor_return"],
+        "annual_return": base_metrics["annual_return"],
+        "sharpe": base_metrics["sharpe"],
+        "max_drawdown": base_metrics["max_drawdown"],
+        "ic_mean": ic_mean,
+        "rank_ic": float(valid_rank_ic.mean()),
+        "ic_std": ic_std,
+        "ic_ir": ic_mean / ic_std if np.isfinite(ic_std) and ic_std > 1e-12 else np.nan,
+        "ic_ir_annualized": False,
+        "ir": base_metrics["sharpe"],
+        "ir_definition": "annualized mean/std versus zero baseline; numerically identical to reported Sharpe",
+        "ir_benchmark": "zero_baseline; equal_weight_multi_factor unavailable in this experiment",
+        "p_ic_gt_002": float(valid_ic.gt(0.02).mean()),
+        "p_ic_lt_neg002": float(valid_ic.lt(-0.02).mean()),
+        "ic_valid_observations": int(len(valid_ic)),
+        "t_stat": return_hac["t_stat"],
+        "p_value": return_hac["p_value"],
+        "hac_test_object": "daily_long_short_return_3bps",
+        "monotonicity": monotonicity_result["monotonicity"],
+        "monotonicity_method": "daily prediction quintiles; fraction of 4 adjacent full-sample mean returns that increase",
+        "calmar": base_metrics["calmar"],
+        "turnover": base_metrics["turnover"],
+        "annual_volatility": base_metrics["annual_volatility"],
+    }])
+
+    holding_rows = [
+        summarize_ic_scope(pred, f"holding_period_{h}d", "prediction", f"audit_return_{h}d")
+        for h in (1, 5, 20)
+    ]
+    robustness_holding = pd.DataFrame(holding_rows)
+
+    audit_sector_map = {
+        "SC": "能源", "FU": "能源", "BU": "能源",
+        "RB": "金属", "HC": "金属", "I": "金属", "JM": "金属", "J": "金属", "SF": "金属",
+        "CU": "金属", "AL": "金属", "ZN": "金属", "NI": "金属", "SN": "金属", "AU": "金属", "AG": "金属",
+        "TA": "化工", "MA": "化工", "L": "化工", "PP": "化工", "V": "化工", "SA": "化工",
+        "M": "农产品", "Y": "农产品", "P": "农产品", "C": "农产品", "CS": "农产品",
+        "SR": "农产品", "CF": "农产品", "RM": "农产品",
+    }
+    pred["audit_sector"] = pred["product"].map(audit_sector_map)
+    robustness_sector = pd.DataFrame([
+        summarize_ic_scope(group, f"sector_{sector}", "prediction", "target_excess")
+        for sector, group in pred.groupby("audit_sector", sort=True)
+    ])
+
+    liquidity = panel[["trade_date", "product", "volume", "open_interest"]].copy()
+    liquidity["audit_liquidity"] = np.log1p(liquidity["volume"].clip(lower=0)) + np.log1p(
+        liquidity["open_interest"].clip(lower=0)
+    )
+    pred_liq = pred.merge(
+        liquidity.rename(columns={"trade_date": "decision_date"})[["decision_date", "product", "audit_liquidity"]],
+        on=["decision_date", "product"], how="left", validate="many_to_one",
+    )
+    liquidity_match_rate = float(pred_liq["audit_liquidity"].notna().mean()) if len(pred_liq) else np.nan
+    cutoff = pred_liq.groupby("sample_date")["audit_liquidity"].transform(lambda s: s.quantile(0.20))
+    liquid_only = pred_liq[
+        pred_liq["audit_liquidity"].notna() & pred_liq["audit_liquidity"].ge(cutoff)
+    ].copy()
+    robustness_liquidity = pd.DataFrame([
+        summarize_ic_scope(pred_liq, "all_products", "prediction", "target_excess"),
+        summarize_ic_scope(liquid_only, "exclude_bottom_20pct_among_valid_daily_liquidity", "prediction", "target_excess"),
+    ])
+    robustness_liquidity["liquidity_definition"] = "log1p(volume)+log1p(open_interest) at decision_date"
+    robustness_liquidity["liquidity_match_rate"] = liquidity_match_rate
+    robustness_liquidity["rows_after_filter"] = [len(pred_liq), len(liquid_only)]
+
+    delayed = pred.sort_values(["product", "sample_date"]).copy()
+    delayed["prediction_delayed_1d"] = delayed.groupby("product", sort=False)["prediction"].shift(1)
+    delayed["previous_sample_date"] = delayed.groupby("product", sort=False)["sample_date"].shift(1)
+    observed_date_order = {date: i for i, date in enumerate(sorted(pred["sample_date"].dropna().unique()))}
+    current_order = delayed["sample_date"].map(observed_date_order)
+    previous_order = delayed["previous_sample_date"].map(observed_date_order)
+    delayed.loc[current_order.sub(previous_order).ne(1), "prediction_delayed_1d"] = np.nan
+    robustness_delay = pd.DataFrame([
+        summarize_ic_scope(pred, "original_signal", "prediction", "target_excess"),
+        summarize_ic_scope(delayed, "signal_delayed_1_observed_market_trading_day", "prediction_delayed_1d", "target_excess"),
+    ])
+
+    methodology = {
+        "evaluation_only": True,
+        "model_strategy_features_unchanged": True,
+        "main_execution_scenario": "3bps one-way; return = existing gross_return - 0.0003 * existing absolute_traded",
+        "ic_definition": "daily cross-sectional correlation between existing OOS prediction and existing 5d target_excess",
+        "ic_ir_annualized": False,
+        "ir_benchmark": "zero baseline because equal_weight_multi_factor is not produced by this experiment",
+        "hac": "Newey-West Bartlett kernel; automatic lag=floor(4*(T/100)^(2/9)); asymptotic normal two-sided p-value",
+        "bootstrap": "circular block bootstrap; block=20; 1000 replications; fixed seed; 95% percentile interval",
+        "monotonicity": "daily prediction quintiles; full-sample mean return by quintile; fraction of four adjacent differences > 0",
+        "holding_periods": "1d uses existing raw_return; 5d uses existing forward_5d_return; 20d compounds 20 consecutive available OOS raw_return observations and is an audit approximation when the OOS panel has gaps",
+        "sector_audit_only": audit_sector_map,
+        "liquidity_tail": "among rows with valid decision-date liquidity, exclude each day's bottom 20% by log1p(volume)+log1p(open_interest); output records match rate",
+        "signal_delay": "within each product use previous prediction only when its sample_date is the immediately previous observed market date in the OOS panel",
+        "cost_scenarios_bps": [0, 3, 5, 10],
+    }
+    return {
+        "unified_metrics_panel": unified_panel,
+        "prediction_ic_daily": ic_daily,
+        "rank_ic_by_year": rank_ic_by_year,
+        "cost_scenarios": cost_scenarios,
+        "statistical_tests": statistical_tests,
+        "grouped_return_monotonicity": grouped_return_summary,
+        "robustness_holding_period": robustness_holding,
+        "robustness_sector": robustness_sector,
+        "robustness_liquidity": robustness_liquidity,
+        "robustness_signal_delay": robustness_delay,
+        "methodology": methodology,
+    }
+
+
+# =============================================================================
 # 8. 可视化与输出
 # =============================================================================
 
@@ -1528,49 +2258,64 @@ def run_assertions(daily: pd.DataFrame, cfg: Config) -> None:
 
 
 def main(cfg: Config = CFG) -> Dict[str, object]:
+    global FACTOR_COLS
     set_seed(cfg.seed); output = Path(cfg.output_dir); output.mkdir(parents=True, exist_ok=True)
-    print("\n========== 中国商品期货 Conv-Transformer 多任务研究开始 ==========", flush=True)
-    print(f"[Config] device={cfg.device}, output={output}", flush=True)
-    print(
-        f"[Config] 原始特征={FACTOR_COLS} | data={cfg.data_start_year}-{cfg.data_end_year} | "
-        f"horizon={cfg.forecast_horizon}日 | expanding={cfg.train_start_year}-{cfg.first_test_year - 1}->{cfg.first_test_year}",
-        flush=True,
-    )
-    root = resolve_data_root(cfg); print(f"[1/9 数据] root={root}", flush=True)
+    print("\n========== 中国商品期货 59因子 Conv-Transformer 多任务研究开始 ==========", flush=True)
+    print(f"[Config] device={cfg.device}, output={output}, dropout={cfg.dropout:.2f}", flush=True)
+    root = resolve_data_root(cfg); print(f"[1/10 数据] root={root}", flush=True)
+
+    feature_mode = resolve_feature_mode(root, cfg)
+    print(f"[Features] mode={feature_mode}", flush=True)
+    feature_matrix: Optional[pd.DataFrame] = None
+    feature_report: Dict[str, object] = {}
+    if feature_mode == "handoff":
+        FACTOR_COLS, feature_matrix, feature_report = load_feature_handoff(root, cfg)
+        print(f"[Features] 交接包 FACTOR_COLS 数量={len(FACTOR_COLS)}", flush=True)
+        print(f"[Features] 前5个={FACTOR_COLS[:5]}", flush=True)
+
     basic = load_basic(root); market, data_report = load_market_data(root, cfg)
-    print(f"[2/9 数据] 行情过滤后 {len(market):,} 行，开始合并合约元数据……", flush=True)
+    data_report.update(feature_report)
+    print(f"[2/10 数据] 行情过滤后 {len(market):,} 行，开始合并合约元数据……", flush=True)
     market = attach_metadata_and_returns(market, basic)
-    print("[3/9 主力] 开始构造仅使用滞后活跃度的因果主力……", flush=True)
-    selected = choose_main_contracts(market, cfg)
-    print("[4/9 面板] 开始构造期限结构与未来5日标签……", flush=True)
+    print("[3/10 主力] 构造因果主力合约……", flush=True); selected = choose_main_contracts(market, cfg)
+    print("[4/10 面板] 构造期限结构与未来5日双任务标签……", flush=True)
     panel, roll_report = build_product_panel(market, selected, cfg.forecast_horizon)
-    print("[5/9 特征] 构造原始OHLC/量仓变化与roll yield，并做每日MAD/Z-Score……", flush=True)
-    factors = FactorEngine(cfg.factor_window, cfg.burn_in_days, cfg.mad_n).transform(panel)
-    missing_report = factors[FACTOR_COLS].isna().mean().rename("missing_rate").rename_axis("factor").reset_index()
-    valid_counts = factors.dropna(subset=FACTOR_COLS).groupby("trade_date")["product"].nunique()
+    if feature_mode == "integrated":
+        print("[5/10 特征] 由整合表主力面板生成59个因果训练特征……", flush=True)
+        FACTOR_COLS, feature_matrix, feature_report = build_integrated_features(panel)
+        print(f"[Features] 整合表 FACTOR_COLS 数量={len(FACTOR_COLS)}", flush=True)
+    else:
+        print("[5/10 特征] 将标签面板与旧59因子交接包 left merge……", flush=True)
+        if feature_matrix is None:
+            raise RuntimeError("handoff 模式缺少特征矩阵")
+    factors, merge_report = merge_handoff_features(panel, feature_matrix, FACTOR_COLS)
+    data_report.update(feature_report)
+    data_report.update(merge_report)
+    valid_feature_rows = factors[FACTOR_COLS].notna().all(axis=1)
+    missing_report = factors[FACTOR_COLS].isna().mean().rename("missing_rate_after_merge").rename_axis("factor").reset_index()
+    valid_counts = factors.loc[valid_feature_rows].groupby("trade_date")["product"].nunique()
     data_report.update({
         "selected_main_rows": len(selected), "panel_rows": len(panel),
-        "factor_rows_after_burn_in": len(factors),
+        "feature_ready_rows": int(valid_feature_rows.sum()),
         "median_valid_products_per_day": float(valid_counts.median()) if len(valid_counts) else np.nan,
     })
-    print(f"[6/9 样本] 构造 [样本, {len(FACTOR_COLS)}特征, {cfg.sequence_length}日] 张量……", flush=True)
+
+    print(f"[6/10 样本] 构造 [样本, {len(FACTOR_COLS)}因子, {cfg.sequence_length}日] 张量……", flush=True)
     x, y, meta = build_sequences(factors, FACTOR_COLS, cfg.sequence_length)
     print(f"[Samples] X={x.shape}, y={y.shape}, range={meta.sample_date.min().date()}~{meta.sample_date.max().date()}", flush=True)
     example_model = make_multitask_model(len(FACTOR_COLS), cfg)
-    print(f"[Model] Conv-Transformer Dual-Head parameters={example_model.count_parameters():,}", flush=True)
-    print("[7/9 训练] 开始 Expanding-Window 训练与样本外预测……", flush=True)
-    predictions, history, importance, checkpoint = walk_forward(x, y, meta, cfg)
-    print("[Stress] 构造市场波动率、平均相关性和流动性压力特征……", flush=True)
+    print(f"[Model] num_factors={len(FACTOR_COLS)}, 参数量={example_model.count_parameters():,}", flush=True)
+
+    print("[7/10 训练] Expanding-Window 多任务训练与样本外预测……", flush=True)
+    predictions, history, importance, checkpoint = walk_forward(x, y, meta, cfg, FACTOR_COLS)
+    print("[8/10 风控] 因果GMM系统性压力概率……", flush=True)
     stress_features = build_systemic_stress_features(panel)
     stress_probabilities = estimate_causal_gmm_stress(stress_features, cfg)
-    print(
-        f"[Stress] 已生成 {len(stress_probabilities):,} 个样本外压力概率；"
-        f"阈值>{cfg.stress_threshold:.2f}时毛杠杆×{cfg.stress_leverage_multiplier:.2f}", flush=True,
-    )
-    print("[8/9 回测] 开始 EMA、动态阈值、信号加权与 GMM 门控……", flush=True)
+    print("[9/10 回测] EMA、动态阈值、信号加权与GMM门控……", flush=True)
     daily, positions = build_daily_portfolio(predictions, cfg, stress_probabilities)
     run_assertions(daily, cfg); metrics = make_metrics_table(daily, cfg)
-    print("[9/9 输出] 生成图表、模型和审计文件……", flush=True)
+
+    print("[10/10 输出] 生成原有图表、模型与结果文件……", flush=True)
     plot_loss(history, output / "loss_curve.png")
     plot_cumulative_and_drawdown(daily, cfg, output / "cumulative_return.png")
     plot_fee_sensitivity(daily, cfg, output / "fee_sensitivity.png")
@@ -1582,17 +2327,34 @@ def main(cfg: Config = CFG) -> Dict[str, object]:
     positions.to_csv(output / "positions.csv", index=False, encoding="utf-8-sig")
     history.to_csv(output / "training_history.csv", index=False, encoding="utf-8-sig")
     roll_report.to_csv(output / "roll_yield_sources.csv", index=False, encoding="utf-8-sig")
-    missing_report.to_csv(output / "factor_missing_report.csv", index=False, encoding="utf-8-sig")
+    missing_report.to_csv(output / "feature_merge_missing_report.csv", index=False, encoding="utf-8-sig")
+    pd.DataFrame({"feature_name": FACTOR_COLS}).to_csv(output / "model_feature_list.csv", index=False, encoding="utf-8-sig")
     stress_features.to_csv(output / "systemic_stress_features.csv", index=False, encoding="utf-8-sig")
     stress_probabilities.to_csv(output / "systemic_stress_probability.csv", index=False, encoding="utf-8-sig")
     with open(output / "run_config_and_data_report.json", "w", encoding="utf-8") as file:
         json.dump({"config": asdict(cfg), "data_report": data_report}, file, ensure_ascii=False, indent=2, default=str)
+
+    # 评价层与原结果落盘隔离：审计失败只告警，不影响模型和原结果文件。
+    audit_outputs: Dict[str, object] = {}
+    print("[Audit] 生成统一指标面板、IC、统计检验及稳健性附表（不改变原结果）……", flush=True)
+    try:
+        audit_outputs = build_evaluation_audit(predictions, daily, panel, cfg)
+        for name, table in audit_outputs.items():
+            if isinstance(table, pd.DataFrame):
+                table.to_csv(output / f"{name}.csv", index=False, encoding="utf-8-sig")
+        with open(output / "evaluation_methodology.json", "w", encoding="utf-8") as file:
+            json.dump(audit_outputs["methodology"], file, ensure_ascii=False, indent=2, default=str)
+    except Exception as exc:
+        warnings.warn(f"评价审计层生成失败，但原模型和原结果已保存：{exc}")
+        with open(output / "evaluation_audit_error.txt", "w", encoding="utf-8") as file:
+            file.write(f"{type(exc).__name__}: {exc}\n")
     print("\n[Done] 样本外回测统计："); print(metrics.to_string(index=False))
     print(f"\n[Done] 所有结果已保存到: {output}")
     return {
         "metrics": metrics, "daily": daily, "predictions": predictions,
         "stress_probabilities": stress_probabilities,
-        "feature_importance": pd.Series(importance, index=FACTOR_COLS), "output_dir": output,
+        "feature_importance": pd.Series(importance, index=FACTOR_COLS),
+        "evaluation_audit": audit_outputs, "output_dir": output,
     }
 
 
