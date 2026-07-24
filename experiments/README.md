@@ -24,6 +24,16 @@ python experiments/run_selected_factor_experiment.py
 python experiments/run_complex_tree_experiment.py
 ```
 
+## Visualization
+
+Generate aggregate-only comparison figures after the three experiments finish:
+
+```bash
+python experiments/plot_results.py --baseline delivery/all_features --selected delivery/selected_features --complex delivery/complex_trees --output figures
+```
+
+The plotting script reads model outputs only. It does not package raw market data.
+
 - `run_oos_ml_experiment.py`：全 92 个注册字段的正则化 LightGBM、XGBoost、随机森林基准。
 - `run_selected_factor_experiment.py`：每个训练折中先按登记相关性簇去重，再按训练期平均绝对横截面 Rank IC 选 Top-30。
 - `run_complex_tree_experiment.py`：使用更多树、更深树的扩展，但仍保留采样、最小节点、L1/L2 或剪枝约束。

@@ -209,6 +209,8 @@ training_handoff/
 *.zip
 *.csv
 *.csv.gz
+delivery/
+_checkpoints/
 
 # Ruff stuff:
 .ruff_cache/
