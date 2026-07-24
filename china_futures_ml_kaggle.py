@@ -6,14 +6,14 @@
 1) 因果主力合约与近远月期限结构；
 2) 原始OHLC相对价格、收盘收益、量仓变化率与商品展期收益；
 3) 20日原始量价序列输入 Conv1d + Self-Attention 双头网络；
-4) 预测未来 5 个交易日累计截面超额收益；
+4) 预测未来 20 个交易日累计截面超额收益；
 5) 2018年起的 Expanding-Window：2018-2021 -> 2022，随后逐年扩展；
 6) 预测值=上涨概率×回归幅度，经3日EMA后按动态分位/零阈值交易；
 7) 输出训练诊断、净值、成本敏感性、因子重要性、模型和审计文件。
 
-时间定义：因子在决策日 t 收盘后可得，t+1 开盘执行。5 日标签覆盖
-从 t+1 开盘开始的五个交易持有期；实际回测仍逐日按 open-to-open 收益记账，
-避免把重叠的 5 日标签错误当成每日组合收益。
+时间定义：因子在决策日 t 收盘后可得，t+1 开盘执行。20 日标签覆盖
+从 t+1 开盘开始的二十个交易持有期；实际回测仍逐日按 open-to-open 收益记账，
+避免把重叠的 20 日标签错误当成每日组合收益。
 """
 
 from __future__ import annotations
@@ -102,9 +102,9 @@ class Config:
     train_start_year: int = 2015
     first_test_year: int = 2022
     last_test_year: int = 2025
-    forecast_horizon: int = 5
+    forecast_horizon: int = 20
     validation_fraction: float = 0.15
-    purge_days: int = 25  # 20日重叠序列 + 5日标签的保护间隔
+    purge_days: int = 40  # 20日输入序列 + 20日标签的防重叠保护间隔
 
     # 卷积局部嵌入 + 单层轻量 Transformer。
     model_dim: int = 48
@@ -118,12 +118,15 @@ class Config:
     max_epochs: int = 40
     patience: int = 7
     learning_rate: float = 1e-3
-    weight_decay: float = 1e-4
+    weight_decay: float = 1e-3
     huber_delta: float = 1.0
     num_workers: int = 0
 
     signal_ema_span: int = 3
     entry_quantile: float = 0.70  # 做多前30%，做空后30%
+    long_exit_quantile: float = 0.40  # 多头跌破截面40%分位才退出
+    short_exit_quantile: float = 0.60  # 空头升破截面60%分位才退出
+    liquidity_entry_quantile: float = 0.20  # 最低20%流动性品种禁止新开仓
     absolute_signal_threshold: float = 0.0
     weighting_method: str = "signal"  # 当前实现：预测强度加权
     stress_threshold: float = 0.80
@@ -615,7 +618,7 @@ def compute_roll_yield_for_day(day: pd.DataFrame, near_row: pd.Series) -> Tuple[
 def build_product_panel(
     data: pd.DataFrame,
     selected: pd.DataFrame,
-    forecast_horizon: int = 5,
+    forecast_horizon: int = 20,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """构造品种面板及未来 H 日累计标签。
 
@@ -695,7 +698,9 @@ def build_product_panel(
 
     product_groups = panel.groupby("product", group_keys=False, sort=False)
     panel = pd.concat(
-        [add_forward_targets(group) for _, group in tqdm(product_groups, desc="[Labels] 未来5日累计收益", unit="品种")],
+        [add_forward_targets(group) for _, group in tqdm(
+            product_groups, desc=f"[Labels] 未来{forecast_horizon}日累计收益", unit="品种"
+        )],
         ignore_index=True,
     )
     # 同一执行日做截面去均值，标签为未来 H 日累计超额收益。
@@ -1142,7 +1147,11 @@ def build_sequences(
                 "contract": current["target_contract"],
                 "target_label": float(current["target_label"]),
                 "raw_return": float(current["execution_return"]),
-                "forward_5d_return": float(current["target_raw"]),
+                "forward_horizon_return": float(current["target_raw"]),
+                "volume": float(current["volume"]) if np.isfinite(current.get("volume", np.nan)) else np.nan,
+                "amount": float(current["amount"]) if np.isfinite(current.get("amount", np.nan)) else np.nan,
+                "open_interest": float(current["open_interest"]) if np.isfinite(current.get("open_interest", np.nan)) else np.nan,
+                "lag_activity": float(current["lag_activity"]) if np.isfinite(current.get("lag_activity", np.nan)) else np.nan,
             })
 
     if not xs:
@@ -1164,7 +1173,7 @@ def build_sequences(
 
 
 class FuturesCNN1D(nn.Module):
-    """输入 [B,F,20]；返回 (方向logits, 未来5日超额收益回归值)。"""
+    """输入 [B,F,20]；返回 (方向logits, 未来配置期超额收益回归值)。"""
 
     def __init__(
         self,
@@ -1477,7 +1486,9 @@ def walk_forward(
     for test_year in range(cfg.first_test_year, cfg.last_test_year + 1):
         # Expanding Window：训练起点固定为 2015，终点随测试年向前扩展。
         train_start = cfg.train_start_year
-        train_mask = sample_year.between(train_start, test_year - 1)
+        test_start = pd.Timestamp(test_year, 1, 1)
+        # 20日标签必须在测试年开始前完全实现，禁止年末训练标签跨入测试期。
+        train_mask = sample_year.between(train_start, test_year - 1) & meta["exit_date"].lt(test_start)
         test_mask = sample_year.eq(test_year)
         train_idx = np.flatnonzero(train_mask.to_numpy())
         test_idx = np.flatnonzero(test_mask.to_numpy())
@@ -1660,11 +1671,11 @@ def build_daily_portfolio(
     cfg: Config,
     stress_probabilities: Optional[pd.DataFrame] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """3日 EMA + 动态分位与绝对阈值入场；越过中位数立即退出。
+    """3日 EMA + 30%分位入场 + 40%/60%宽退出缓冲 + 流动性准入。
 
-    多头：信号位于上30%且大于绝对阈值才入场，跌破当日中位数即退出。
-    空头完全对称：位于下30%且小于负阈值才入场，升破中位数即退出。
-    不强制固定持仓数量；已有费用、信号加权和GMM门控保持不变。
+    入场仍为多头前30%、空头后30%。退出放宽为：多头跌破40%分位才退出，
+    空头升破60%分位才退出。决策日流动性最低20%的品种不得新开仓，但
+    已有持仓仍按退出线正常保留或平仓。费用、信号加权和GMM门控不变。
     """
     position_rows: List[Dict[str, object]] = []
     daily_rows: List[Dict[str, object]] = []
@@ -1679,9 +1690,10 @@ def build_daily_portfolio(
     if stress_probabilities is None or stress_probabilities.empty:
         scored["systemic_stress_probability"] = 0.0
     else:
-        stress = stress_probabilities.rename(columns={"date": "sample_date"}).copy()
-        stress["sample_date"] = pd.to_datetime(stress["sample_date"])
-        scored = scored.merge(stress, on="sample_date", how="left")
+        # 压力特征在 decision_date 收盘后可得；用决策日概率控制下一 sample_date 开盘仓位。
+        stress = stress_probabilities.rename(columns={"date": "decision_date"}).copy()
+        stress["decision_date"] = pd.to_datetime(stress["decision_date"])
+        scored = scored.merge(stress, on="decision_date", how="left")
         scored["systemic_stress_probability"] = scored["systemic_stress_probability"].fillna(0.0).clip(0.0, 1.0)
 
     groups = scored.groupby("sample_date", sort=True)
@@ -1694,26 +1706,58 @@ def build_daily_portfolio(
         n_assets = len(day)
         upper_threshold = float(day["smoothed_prediction"].quantile(cfg.entry_quantile))
         lower_threshold = float(day["smoothed_prediction"].quantile(1.0 - cfg.entry_quantile))
-        median_signal = float(day["smoothed_prediction"].median())
+        long_exit_threshold = float(day["smoothed_prediction"].quantile(cfg.long_exit_quantile))
+        short_exit_threshold = float(day["smoothed_prediction"].quantile(cfg.short_exit_quantile))
         signal_by_product = day.set_index("product")["smoothed_prediction"].to_dict()
         available = set(signal_by_product)
 
-        # 中位数是即时退出线，不再使用固定40%缓冲区。
+        # 已有仓位先按宽缓冲带判断退出，流动性排名不强制平掉旧仓。
         long_products = {
             p for p in long_products
-            if p in available and signal_by_product[p] >= median_signal
+            if p in available and signal_by_product[p] >= long_exit_threshold
         }
         short_products = {
             p for p in short_products
-            if p in available and signal_by_product[p] <= median_signal
+            if p in available and signal_by_product[p] <= short_exit_threshold
         }
 
+        liquidity_fields = [name for name in ("volume", "amount", "lag_activity") if name in day]
+        day["entry_liquidity"] = np.nan
+        liquidity_source = "missing"
+        for field in liquidity_fields:
+            values = pd.to_numeric(day[field], errors="coerce")
+            if values.notna().sum() >= cfg.min_cross_section:
+                day["entry_liquidity"] = values
+                liquidity_source = field
+                break
+        valid_liquidity = day["entry_liquidity"].replace([np.inf, -np.inf], np.nan).dropna()
+        if valid_liquidity.empty:
+            entry_eligible = pd.Series(True, index=day.index)
+            liquidity_cutoff = np.nan
+            liquidity_excluded_count = 0
+        else:
+            # 稳定排序严格剔除有效流动性截面的底部20%；并列时按product打破平局。
+            liquidity_order = day.loc[valid_liquidity.index].sort_values(
+                ["entry_liquidity", "product"], ascending=[True, True], kind="mergesort"
+            )
+            liquidity_excluded_count = int(math.ceil(len(liquidity_order) * cfg.liquidity_entry_quantile))
+            excluded_indices = liquidity_order.index[:liquidity_excluded_count]
+            entry_eligible = day["entry_liquidity"].notna()
+            entry_eligible.loc[excluded_indices] = False
+            liquidity_cutoff = (
+                float(liquidity_order.iloc[liquidity_excluded_count - 1]["entry_liquidity"])
+                if liquidity_excluded_count else np.nan
+            )
+
+        # 低流动性只限制新开仓，不影响满足缓冲条件的旧仓继续持有。
         long_entries = day[
-            day["smoothed_prediction"].ge(upper_threshold)
+            entry_eligible
+            & day["smoothed_prediction"].ge(upper_threshold)
             & day["smoothed_prediction"].gt(cfg.absolute_signal_threshold)
         ]["product"]
         short_entries = day[
-            day["smoothed_prediction"].le(lower_threshold)
+            entry_eligible
+            & day["smoothed_prediction"].le(lower_threshold)
             & day["smoothed_prediction"].lt(-cfg.absolute_signal_threshold)
         ]["product"]
         long_products.update(long_entries.tolist())
@@ -1763,7 +1807,12 @@ def build_daily_portfolio(
             "n_short": len(short_side),
             "upper_entry_threshold": upper_threshold,
             "lower_entry_threshold": lower_threshold,
-            "median_exit_threshold": median_signal,
+            "long_exit_threshold_q40": long_exit_threshold,
+            "short_exit_threshold_q60": short_exit_threshold,
+            "liquidity_entry_cutoff_q20": liquidity_cutoff,
+            "liquidity_source": liquidity_source,
+            "liquidity_excluded_assets": liquidity_excluded_count,
+            "entry_eligible_assets": int(entry_eligible.sum()),
             "systemic_stress_probability": stress_probability,
             "leverage_multiplier": leverage_multiplier,
             "stress_gate_active": bool(stress_probability > cfg.stress_threshold),
@@ -1782,6 +1831,8 @@ def build_daily_portfolio(
                 "weight": record["weight"],
                 "prediction": record["prediction"],
                 "smoothed_prediction": record["smoothed_prediction"],
+                "entry_liquidity": record.get("entry_liquidity", np.nan),
+                "liquidity_source": liquidity_source,
                 "systemic_stress_probability": stress_probability,
                 "leverage_multiplier": leverage_multiplier,
                 "realized_return": record["raw_return"],
@@ -1964,22 +2015,21 @@ def quantile_spread_and_monotonicity(
 
 
 def add_forward_horizon_returns(predictions: pd.DataFrame, horizons: Sequence[int] = (1, 5, 20)) -> pd.DataFrame:
-    """从OOS逐日可交易收益构造展示用前向持有期收益，不参与训练或原策略。"""
-    result = predictions.sort_values(["product", "sample_date"]).copy()
-    result["audit_return_1d"] = result["raw_return"]
-    result["audit_return_5d"] = result["forward_5d_return"]
-    if 20 in horizons:
+    """从OOS逐日可交易收益构造展示用前向收益，不参与训练或原策略。"""
+    result = predictions.sort_values(["product", "sample_date"]).reset_index(drop=True).copy()
+    for horizon in horizons:
         values = np.full(len(result), np.nan, dtype=float)
         for _, positions in result.groupby("product", sort=False).indices.items():
             positions = np.asarray(positions, dtype=int)
             returns = result.iloc[positions]["raw_return"].to_numpy(dtype=float)
             dates = pd.to_datetime(result.iloc[positions]["sample_date"]).to_numpy()
-            for i in range(0, len(positions) - 20 + 1):
-                window = returns[i:i + 20]
-                calendar_gap = (pd.Timestamp(dates[i + 19]) - pd.Timestamp(dates[i])).days
-                if np.isfinite(window).all() and calendar_gap <= 45:
+            for i in range(0, len(positions) - horizon + 1):
+                window = returns[i:i + horizon]
+                calendar_gap = (pd.Timestamp(dates[i + horizon - 1]) - pd.Timestamp(dates[i])).days
+                max_calendar_gap = max(7, int(math.ceil(horizon * 2.25)))
+                if np.isfinite(window).all() and calendar_gap <= max_calendar_gap:
                     values[positions[i]] = float(np.prod(1.0 + window) - 1.0)
-        result["audit_return_20d"] = values
+        result[f"audit_return_{horizon}d"] = values
     return result
 
 
@@ -2045,12 +2095,12 @@ def build_evaluation_audit(
     base_returns = audit_returns[3]
     return_hac = hac_mean_test(base_returns)
     return_bootstrap = circular_block_bootstrap_mean_ci(base_returns, seed=cfg.seed)
-    ic_hac = hac_mean_test(ic_daily["pearson_ic"])
+    ic_hac = hac_mean_test(ic_daily["pearson_ic"], max_lag=max(1, cfg.forecast_horizon - 1))
     ic_bootstrap = circular_block_bootstrap_mean_ci(ic_daily["pearson_ic"], seed=cfg.seed + 1)
     statistical_tests = pd.DataFrame([
         {"test_object": "daily_long_short_return_3bps", **return_hac, **return_bootstrap,
          "bootstrap_block_length": 20, "bootstrap_replications": 1000},
-        {"test_object": "daily_pearson_ic_5d", **ic_hac, **ic_bootstrap,
+        {"test_object": f"daily_pearson_ic_{cfg.forecast_horizon}d", **ic_hac, **ic_bootstrap,
          "bootstrap_block_length": 20, "bootstrap_replications": 1000},
     ])
 
@@ -2155,13 +2205,13 @@ def build_evaluation_audit(
         "evaluation_only": True,
         "model_strategy_features_unchanged": True,
         "main_execution_scenario": "3bps one-way; return = existing gross_return - 0.0003 * existing absolute_traded",
-        "ic_definition": "daily cross-sectional correlation between existing OOS prediction and existing 5d target_excess",
+        "ic_definition": "daily cross-sectional correlation between existing OOS prediction and configured-horizon target_excess",
         "ic_ir_annualized": False,
         "ir_benchmark": "zero baseline because equal_weight_multi_factor is not produced by this experiment",
-        "hac": "Newey-West Bartlett kernel; automatic lag=floor(4*(T/100)^(2/9)); asymptotic normal two-sided p-value",
+        "hac": "Newey-West Bartlett kernel; return test uses automatic lag=floor(4*(T/100)^(2/9)); overlapping-horizon IC test uses forecast_horizon-1 lags; asymptotic normal two-sided p-value",
         "bootstrap": "circular block bootstrap; block=20; 1000 replications; fixed seed; 95% percentile interval",
         "monotonicity": "daily prediction quintiles; full-sample mean return by quintile; fraction of four adjacent differences > 0",
-        "holding_periods": "1d uses existing raw_return; 5d uses existing forward_5d_return; 20d compounds 20 consecutive available OOS raw_return observations and is an audit approximation when the OOS panel has gaps",
+        "holding_periods": "1d/5d/20d all compound the corresponding number of consecutive available OOS raw_return observations; these are evaluation-only audit horizons and do not alter the configured training target",
         "sector_audit_only": audit_sector_map,
         "liquidity_tail": "among rows with valid decision-date liquidity, exclude each day's bottom 20% by log1p(volume)+log1p(open_interest); output records match rate",
         "signal_delay": "within each product use previous prediction only when its sample_date is the immediately previous observed market date in the OOS panel",
@@ -2278,7 +2328,7 @@ def main(cfg: Config = CFG) -> Dict[str, object]:
     print(f"[2/10 数据] 行情过滤后 {len(market):,} 行，开始合并合约元数据……", flush=True)
     market = attach_metadata_and_returns(market, basic)
     print("[3/10 主力] 构造因果主力合约……", flush=True); selected = choose_main_contracts(market, cfg)
-    print("[4/10 面板] 构造期限结构与未来5日双任务标签……", flush=True)
+    print(f"[4/10 面板] 构造期限结构与未来{cfg.forecast_horizon}日双任务标签……", flush=True)
     panel, roll_report = build_product_panel(market, selected, cfg.forecast_horizon)
     if feature_mode == "integrated":
         print("[5/10 特征] 由整合表主力面板生成59个因果训练特征……", flush=True)
