@@ -1,0 +1,87 @@
+# 单因子排序模型 — 图表说明
+
+本说明对应 `single_factor_rank_v1` 样本外结果（2019–2024，5 日持有/调仓，主成本单边 5bp）。
+
+- **图片目录**：`modeling/single_factor_rank_v1/outputs/visuals/`
+- **表格目录**：`modeling/single_factor_rank_v1/outputs/tables/`
+- **生成脚本**：`modeling/single_factor_rank_v1/make_visuals.py`
+
+## 一、图片说明
+
+| 文件 | 内容 | 怎么读 |
+|---|---|---|
+| `01_rankic_by_usage_boxplot.png` | 92 字段按 `usage_type` 的 RankIC 箱线图 | 比较 predictor / risk / conditional / quality_flag 的预测力分布；`quality_flag` 偏高时勿直接当经济结论。 |
+| `02_predictor_rankic_bars.png` | 36 个 predictor 的 RankIC 横条图 | 蓝为正、红为负；正文主叙事看此图头部。 |
+| `03_rankic_vs_gross_sharpe.png` | RankIC vs 毛 Sharpe 散点 | 右上更理想；颜色区分 usage_type。 |
+| `04_predictor_cost_sensitivity_heatmap.png` | RankIC Top12 的 0/3/5/10bp Sharpe 热力图 | 看成本抬升后颜色是否迅速变冷（变负）。 |
+| `05_usage_type_counts.png` | 注册字段构成 | 审计用：确认 36/45/6/5 构成。 |
+| `06_predictor_net5bps_sharpe_bars.png` | 36 predictor 净 5bp Sharpe | 协议主成本下谁还能为正；通常极少。 |
+| `07_highlight_equity_curves.png` | 重点因子毛/净 5bp 净值曲线 | 左毛右净；对比 `warehouse_tightness` / `carry` / `basis_fresh` / `short_reversal_5`。 |
+| `08_shortlist_overlap.png` | 三张 Top10 短表的交集计数 | 进入 3 张短表的因子优先写进汇报。 |
+
+## 二、表格说明
+
+### 2.1 全量 / 分组有序表
+
+| 文件 | 内容 | 推荐用途 |
+|---|---|---|
+| `01_all_by_rank_ic.csv` | 全部 92 字段按 RankIC 总榜 | 审计、复现；注意前列可能是 `__missing`。 |
+| `02_predictor_by_rank_ic.csv` | 仅 predictor，按 RankIC | **经济主表**。 |
+| `03_all_by_gross_sharpe.csv` | 全部字段按毛 Sharpe | 毛收益视角对照。 |
+| `04_predictor_by_net5bps_sharpe.csv` | predictor 按净 5bp Sharpe | **成本后主表**。 |
+| `05_by_usage_*_rank_ic.csv` | 按 usage_type 拆分的 RankIC 表 | 分类排查。 |
+
+### 2.2 对照短表（汇报用）
+
+| 文件 | 内容 | 怎么读 |
+|---|---|---|
+| `06_shortlist_top10_by_rank_ic.csv` | A：RankIC Top10 | 预测力短名单。 |
+| `07_shortlist_top10_by_net5bps_sharpe.csv` | B：净 5bp Sharpe Top10 | 成本后短名单。 |
+| `08_shortlist_top10_by_stability.csv` | C：稳定性 Top10（RankIC>0） | 正 IC 年数 / 胜率。 |
+| `09_shortlist_overlap.csv` | A/B/C 是否入围及入围次数 | `n_shortlists=3` 为三表交集。 |
+| `SHORTLISTS.md` | 短表 Markdown 摘要 | 直接可贴进报告。 |
+| `README.md` | 表格目录索引 + predictor 前 15 摘录 | 快速浏览入口。 |
+
+## 三、阅读建议
+
+1. **先图后表**：用 `02`/`06` 看预测力，用 `04`/`06`/`07` 看成本约束，再用 `08` 定优先讨论名单。
+2. **全量 92 与 predictor 36 分层**：全量榜可被缺失标志虚高；正文只用 predictor。
+3. **主成本是 5bp**：3bp 仅作敏感性，不要和 5bp 结论混用。
+4. **净值按调仓日复利**：`07` 图与 `strategy_daily_returns.csv` 均为每 5 日一点。
+
+## 四、重新生成
+
+```bash
+set PYTHONPATH=src
+py modeling/single_factor_rank_v1/make_visuals.py
+```
+
+## 五、本次生成文件清单
+
+### 图片
+
+- `01_rankic_by_usage_boxplot.png`
+- `02_predictor_rankic_bars.png`
+- `03_rankic_vs_gross_sharpe.png`
+- `04_predictor_cost_sensitivity_heatmap.png`
+- `05_usage_type_counts.png`
+- `06_predictor_net5bps_sharpe_bars.png`
+- `07_highlight_equity_curves.png`
+- `08_shortlist_overlap.png`
+
+### 表格
+
+- `01_all_by_rank_ic.csv`
+- `02_predictor_by_rank_ic.csv`
+- `03_all_by_gross_sharpe.csv`
+- `04_predictor_by_net5bps_sharpe.csv`
+- `05_by_usage_conditional_rank_ic.csv`
+- `05_by_usage_predictor_rank_ic.csv`
+- `05_by_usage_quality_flag_rank_ic.csv`
+- `05_by_usage_risk_rank_ic.csv`
+- `06_shortlist_top10_by_rank_ic.csv`
+- `07_shortlist_top10_by_net5bps_sharpe.csv`
+- `08_shortlist_top10_by_stability.csv`
+- `09_shortlist_overlap.csv`
+- `SHORTLISTS.md`
+- `README.md`

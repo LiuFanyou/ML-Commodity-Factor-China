@@ -1,0 +1,12 @@
+{
+  "purpose": "align the final ML matrix to the frozen development feature registry",
+  "sealed_metrics_recomputed": false,
+  "factor_values_changed": false,
+  "added_quality_mask_columns": [
+    "amihud_20__missing"
+  ],
+  "registry_feature_count": 59,
+  "matrix_row_count": 77206,
+  "matrix_hash_before": "4ffc243195fbf3db151fa862689dec23fb1fe9e654d9b78fbb54663c84ca2059",
+  "matrix_hash_after": "1087f4c8b3dd52ec3504b65ab8504ae87ff72a6ec0ebbb7df66dc6214c26bd96"
+}

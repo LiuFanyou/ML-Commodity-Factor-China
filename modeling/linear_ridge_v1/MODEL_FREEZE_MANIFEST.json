@@ -1,0 +1,24 @@
+{
+  "created_at_utc": "2026-07-23T01:30:54.830140+00:00",
+  "model_version": "linear_ridge_v1",
+  "status": "frozen_before_supplemental_2025",
+  "supplemental_train_period": "2022-01-01/2024-12-31",
+  "supplemental_test_period": "2025-01-01/2025-12-31",
+  "factor_freeze_manifest_sha256": "b62c5d14ce896654cc9fd3568f292088e3c6a7a053fdd35d98b4ad9f9ac346f1",
+  "frozen_hashes": {
+    "src/factor_modeling/__init__.py": "c6d94c9d53647f0113419c39ee309b431ed027bd16107217648c9b852006597d",
+    "src/factor_modeling/linear_ridge.py": "481474236701ae344a3c249e91ca15e2285223632d32e23785331607ec624e53",
+    "src/factor_modeling/model_freeze.py": "8845a901d72a77075351f734a8d1d1e358934d1ab66fb64aac2b83c45cbb2f25",
+    "src/factor_modeling/supplemental_2025.py": "62539589a1df596cceefb93ae109bb5ac139cb368fdbdb019924634a56989502",
+    "modeling/linear_ridge_v1/config.json": "a1858de24978d53ed7c93c5bdf335bc3440e967eb9b43671740dc2bd965f9ebe",
+    "modeling/linear_ridge_v1/supplemental_2025_config.json": "812c1d6022f357ca0e66659fa40dc15a48952556244a666401f362aa6ea9c7b2",
+    "modeling/linear_ridge_v1/README.md": "938ef89ab5667ef441f0097641ac6f149e534d3ef24e4dc7e0644b1f24a46299",
+    "training_handoff/ml_feature_registry.csv": "ddfd721d9c77316434d266560e32651b447aa79766574786414fbdf387c7eb74",
+    "features/ml_features.csv.gz": "1087f4c8b3dd52ec3504b65ab8504ae87ff72a6ec0ebbb7df66dc6214c26bd96",
+    "training_handoff/ml_features_development.csv.gz": "204294ea988314a065c70028911a3b83806f79dbca643a60674979030202ad11",
+    "training_handoff/labels_development.csv.gz": "6e3ac29da3fbd9f94c1c9bf5d73ec19c826020d9885848b31a31e920906162e8",
+    "modeling/linear_ridge_v1/outputs/fold_metrics.csv": "c8a1b020825f37a119cfb2f7556b7a3182549c5a825bfa064a032b99a49da3b6",
+    "modeling/linear_ridge_v1/outputs/coefficient_summary.csv": "6c165535397a0ee68df13d3d67a311289653da33b02b5bd3f8095b21f3e5b7dc",
+    "modeling/linear_ridge_v1/outputs/run_summary.json": "84bab95a6caa6028775bc783cfb2fcea158f18f8276763f417c3f02a906cbcb7"
+  }
+}

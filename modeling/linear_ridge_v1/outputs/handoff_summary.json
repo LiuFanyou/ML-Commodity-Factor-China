@@ -1,0 +1,12 @@
+{
+  "handoff_directory": "D:\\软件2\\AI-15-demo-main\\--main2\\--main - 副本 (3)\\training_handoff",
+  "n_features": 92,
+  "feature_rows": 70822,
+  "label_rows": 70822,
+  "feature_start": "2015-01-05",
+  "feature_end": "2024-12-31",
+  "n_products": 30,
+  "registry_file": "ml_feature_registry.csv",
+  "feature_file": "ml_features_development.csv.gz",
+  "label_file": "labels_development.csv.gz"
+}

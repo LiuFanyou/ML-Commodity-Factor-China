@@ -1,0 +1,13 @@
+{
+  "run_version": "expanding_2015_v1",
+  "schema_basis": "2015-2024 training-only factor screening for the 2025 outer fold",
+  "feature_file": "ml_features.csv.gz",
+  "registry_file": "ml_feature_registry.csv",
+  "label_file": "labels.csv.gz",
+  "keys": [
+    "trade_date",
+    "product"
+  ],
+  "feature_availability": "T close computed; earliest use T+1 open",
+  "warning": "2025 is historical supplementary evidence, not a pristine sealed test"
+}

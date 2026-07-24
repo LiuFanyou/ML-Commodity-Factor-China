@@ -1,0 +1,15 @@
+feature_name,in_rank_ic_top10,in_net5_top10,in_stability_top10,n_shortlists
+basis_fresh__csz,True,True,True,3
+carry_annualized__csz,True,True,True,3
+information_divergence__csz,True,True,True,3
+short_reversal_5__csz,True,True,True,3
+warehouse_tightness__csz,True,True,True,3
+information_consistency__csz,True,True,False,2
+inventory_price_divergence__csz,True,False,True,2
+nonlinear_tightness__csz,True,True,False,2
+sector_relative_value_60__csz,False,True,True,2
+term_structure_slope__csz,True,True,False,2
+tightness_composite__csz,True,True,False,2
+inventory_acceleration__csz,False,False,True,1
+term_structure_acceleration__csz,False,False,True,1
+term_structure_momentum__csz,False,False,True,1

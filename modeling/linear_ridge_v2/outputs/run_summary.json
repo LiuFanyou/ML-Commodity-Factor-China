@@ -1,0 +1,79 @@
+{
+  "model": "Ridge",
+  "model_version": "linear_ridge_v2",
+  "selection_mode": "train_ic_corr",
+  "min_train_rank_ic": 0.01,
+  "max_pairwise_corr": 0.7,
+  "protocol": {
+    "primary_target": "future_return_5d",
+    "split": "expanding_window_from_fold_definitions",
+    "holding_days": 5,
+    "rebalance_frequency_days": 5,
+    "base_cost_bps_one_way": 5.0,
+    "cost_scenarios_bps_one_way": [
+      0.0,
+      3.0,
+      5.0,
+      10.0
+    ]
+  },
+  "prior_universe_size": 36,
+  "features": 36,
+  "mean_selected_universe_size": 12.666666666666666,
+  "handoff": {
+    "handoff_directory": "D:\\软件2\\AI-15-demo-main\\--main2\\--main - 副本 (3)\\training_handoff",
+    "n_features": 92,
+    "feature_rows": 70822,
+    "label_rows": 70822,
+    "feature_start": "2015-01-05",
+    "feature_end": "2024-12-31",
+    "n_products": 30,
+    "registry_file": "ml_feature_registry.csv",
+    "feature_file": "ml_features_development.csv.gz",
+    "label_file": "labels_development.csv.gz"
+  },
+  "folds": [
+    "fold_2019",
+    "fold_2020",
+    "fold_2021",
+    "fold_2022",
+    "fold_2023",
+    "fold_2024"
+  ],
+  "oos_rows": 43234,
+  "oos_days": 1450,
+  "rebalance_days": 293,
+  "mean_rank_ic": 0.02173535725337893,
+  "rank_ic_hit_rate": 0.5572413793103448,
+  "gross": {
+    "annual_return": 0.02887392674859245,
+    "annual_volatility": 0.08249325498050324,
+    "sharpe": 0.3500156074022855,
+    "max_drawdown": -0.17331546388694985,
+    "total_return": 0.1595966773009878,
+    "hit_rate": 0.552901023890785
+  },
+  "net_base_cost": {
+    "annual_return": -0.02152607325140757,
+    "annual_volatility": 0.08249325498050324,
+    "sharpe": -0.2609434341813173,
+    "max_drawdown": -0.29248618895000056,
+    "total_return": -0.13493097884074257,
+    "hit_rate": 0.48464163822525597
+  },
+  "net_3bps": {
+    "annual_return": -0.001366073251407557,
+    "annual_volatility": 0.08249325498050324,
+    "sharpe": -0.016559817547876127,
+    "max_drawdown": -0.24324287275563772,
+    "total_return": -0.027323293478593746,
+    "hit_rate": 0.5017064846416383
+  },
+  "v1_comparison": {
+    "mean_rank_ic": 0.024661281169021672,
+    "gross_sharpe": 0.3973086139792692,
+    "net_5bps_sharpe": -0.21942744936849318
+  },
+  "report": "D:\\软件2\\AI-15-demo-main\\--main2\\--main - 副本 (3)\\modeling\\linear_ridge_v2\\linear_ridge_report.md",
+  "note": "Ridge after predictor prior + train-window RankIC filter and greedy correlation dedup"
+}

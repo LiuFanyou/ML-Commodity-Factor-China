@@ -1,0 +1,15 @@
+{
+  "phase": "development",
+  "development_end": "2024-12-31",
+  "feature_instance_count": 59,
+  "conceptual_factor_count": 57,
+  "ml_feature_count": 59,
+  "class_counts": {
+    "A": 2,
+    "B": 11,
+    "C": 4,
+    "D": 7,
+    "E": 9,
+    "F": 24
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "created_at_utc": "2026-07-22T16:21:20.644981+00:00",
+  "dataset_version": "CORE30_V1",
+  "development_end": "2024-12-31",
+  "sealed_start": "2025-01-01",
+  "sealed_end": "2025-12-31",
+  "source_hashes": {
+    "config/screening.json": "227ebc909a369f99772e8fa457f525d9f281f6dd49925bfd57aae3874b954601",
+    "中国商品期货Alpha因子库V2.1_分类版.md": "40f11e790a763d1351412ff56db65b1e14af3ac7d0840e8f0cd1444c1cf52ebd",
+    "src/factor_screening/__init__.py": "facd6cd6f61a1b6ff281c3f40a25397aa70c272e2a329a9f9c3d57a0141c3b79",
+    "src/factor_screening/__main__.py": "7d6008e629aa5d2f5e9ac4fac71123c73bba1c53215acddf7032d4534a81a91e",
+    "src/factor_screening/catalog.py": "b1f8f5c53f68d4382303f6a8b37487d0f99d7b6e58132122f8f673fa41cac33d",
+    "src/factor_screening/classification.py": "7c66ee71257360755968889ee43fa6c67d572c322f5bbb75361a822eed790214",
+    "src/factor_screening/config.py": "faae5fe8665121102c17105f23784c549faefc3c243e47045681dee5d6cd58a9",
+    "src/factor_screening/data.py": "c1dbf723d8bb35d332f354d46599a18cb1dbef9d9edc02972d2909078cfb61ce",
+    "src/factor_screening/dedup.py": "6aba280a3fb62155d0e880ec5d8e7bd4599fc831ab7b4589901fbc7e50ad9a89",
+    "src/factor_screening/factor_processing.py": "e059054b8d9646960879d3c58d9f66d197ad2d60f267d553d7e2d0b3c6607c1d",
+    "src/factor_screening/factors.py": "b08e1984b05df6145a76247a53c6de6188b96b2f2769244117d19b7265f2dc90",
+    "src/factor_screening/feature_processing.py": "303605b370bc9860de1fc5c29f0bd5a09376058603b60f0d08286431ab60efb9",
+    "src/factor_screening/freeze.py": "0ad0a5a67518b1e38a8ded594699cdde6432d06f18c63e22d963659a90596bad",
+    "src/factor_screening/incremental.py": "5fbfd43c25ebb31dab2ecacabaf61c7344bd180a10a8cb90ac0a8fce9550b622",
+    "src/factor_screening/labels.py": "9150841da26a989587209139b13af81443ae6f65ff5ee6c09263ace4924f0782",
+    "src/factor_screening/metrics.py": "ec7360b926d4129cd547b1e622f5205030b6a3f6c89ce476fc43a4ec5aa52b8e",
+    "src/factor_screening/pipeline.py": "17085c7c98ce4cf027f30f9b0cd295b3da0d82e73ade3aad9b74b50108115f67",
+    "src/factor_screening/point_in_time.py": "0ff6afc5d3b82b5d76e3d45cece7136ec180a8c5cc23efe4528e202cec1babcc",
+    "src/factor_screening/reporting.py": "2fde1dc0dd3b90388c74f9621db80b8e93a3598c1ed811d1746e6c7d539ec344"
+  },
+  "development_output_hashes": {
+    "artifacts/development/feature_classification.csv": "de59f61c4c7335d790c180c5da2170052806d9ce8ec85a96c58b9d38bca0433d",
+    "artifacts/development/conceptual_factor_classification.csv": "fba7bf57a3d9f5ce1c58fd37e23a1f78eb99bfcde9a895023807f3c9fe478a00",
+    "features/ml_feature_registry.csv": "ddfd721d9c77316434d266560e32651b447aa79766574786414fbdf387c7eb74"
+  }
+}

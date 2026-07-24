@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class FactorSpec:
+    factor_id: int
+    name_cn: str
+    name_en: str
+    category: str
+    usage_type: str
+    data_source: str
+    implementation_status: str
+    expected_direction: int
+    economic_meaning: str
+    missing_reason: str = ""
+
+
+def _s(
+    factor_id: int,
+    name_cn: str,
+    name_en: str,
+    category: str,
+    usage_type: str,
+    data_source: str,
+    status: str,
+    direction: int,
+    meaning: str,
+    missing: str = "",
+) -> FactorSpec:
+    return FactorSpec(factor_id, name_cn, name_en, category, usage_type, data_source, status, direction, meaning, missing)
+
+
+FACTOR_CATALOG: tuple[FactorSpec, ...] = (
+    _s(1, "时间序列动量", "Time-Series Momentum", "趋势与动量", "predictor", "合约收益", "implemented", 1, "价格冲击与机构调仓可能形成中期延续"),
+    _s(2, "横截面动量", "Cross-Sectional Momentum", "趋势与动量", "predictor", "合约收益", "implemented", 1, "过去相对强势品种可能继续跑赢弱势品种"),
+    _s(3, "趋势效率", "Trend Efficiency", "趋势与动量", "conditional", "合约收益", "implemented", 0, "区分平滑趋势与高噪声路径"),
+    _s(4, "多周期趋势一致性", "Multi-Horizon Trend Consistency", "趋势与动量", "predictor", "合约收益", "implemented", 1, "多个周期同向可降低单一参数偶然性"),
+    _s(5, "Carry", "Carry", "期限结构与Carry", "predictor", "全合约曲线", "implemented", 1, "期限结构反映便利收益、库存压力与持有补偿"),
+    _s(6, "Carry变化", "Carry Change", "期限结构与Carry", "predictor", "全合约曲线", "implemented", 1, "期限结构边际收紧可能先于价格调整"),
+    _s(7, "基差", "Basis", "基差与现货", "predictor", "现货与期货", "missing_data", 1, "现货相对期货强弱反映近端供需", "现有所谓现货文件实为会员成本，不是可比现货价"),
+    _s(8, "基差冲击", "Basis Shock", "基差与现货", "predictor", "现货与期货", "missing_data", 1, "异常基差变化可能代表供需新息", "缺少可比且按真实发布时间对齐的现货价格"),
+    _s(9, "基差动量", "Basis Momentum", "期限结构与Carry", "predictor", "近远月合约", "implemented", 1, "近月相对远月走强刻画曲线动态收紧"),
+    _s(10, "期限结构曲率", "Curve Curvature", "期限结构与Carry", "predictor", "至少三个流动合约", "implemented", 0, "曲线中部异常可能反映局部供需与换月压力"),
+    _s(11, "价值因子", "Value", "价值与均值回复", "predictor", "合约收益", "implemented", 1, "价格对历史锚点的偏离可能修复"),
+    _s(12, "短期反转", "Short-Term Reversal", "价值与均值回复", "predictor", "合约收益", "implemented", 1, "短期流动性冲击与过度反应可能反向修复"),
+    _s(13, "库存稀缺", "Inventory Scarcity", "库存与供需", "predictor", "库存", "missing_data", 1, "低季节调整库存代表稀缺与高便利收益", "严格点时库存没有真实available_date且字段语义未确认"),
+    _s(14, "库存变化", "Inventory Change", "库存与供需", "predictor", "库存", "missing_data", 1, "去库存表示供需边际趋紧", "严格点时库存没有真实available_date且字段语义未确认"),
+    _s(15, "库存意外", "Inventory Surprise", "信息冲击", "predictor", "库存与预期", "missing_data", 1, "相对预期的库存新息可能触发再定价", "缺少真实发布时间与公布前预期"),
+    _s(16, "仓单紧张", "Warehouse Receipt Tightness", "库存与供需", "predictor", "注册仓单", "missing_data", 1, "低仓单可能反映可交割供给紧张", "仓单真实发布时间未确认，point_in_time_usable均为False"),
+    _s(17, "供需紧张度", "Tightness", "库存与供需", "predictor", "库存、仓单、基差、Carry", "missing_data", 1, "多源一致的紧张信号可能提高可信度", "库存、仓单和现货基差缺少严格点时数据"),
+    _s(18, "持仓量增长", "Open-Interest Growth", "交易行为与资金流", "predictor", "持仓量", "implemented", 0, "新增持仓刻画资金进入与风险承担"),
+    _s(19, "价格—持仓量交互", "Price-OI Interaction", "交易行为与资金流", "predictor", "价格与持仓量", "implemented", 1, "价格与新增持仓同向可能确认趋势"),
+    _s(20, "套保压力", "Hedging Pressure", "交易行为与资金流", "conditional", "商业交易者分类持仓", "missing_data", 0, "套保需求可能向风险承担者支付补偿", "没有可靠Commercial/Non-commercial分类持仓"),
+    _s(21, "成交量冲击", "Volume Shock", "交易行为与资金流", "conditional", "成交量", "implemented", 0, "异常成交代表关注、信息或流动性冲击"),
+    _s(22, "Amihud非流动性", "Amihud Illiquidity", "交易行为与资金流", "risk", "收益与成交额", "implemented", -1, "单位成交额价格冲击刻画流动性风险"),
+    _s(23, "成交量—持仓量换手率", "Volume-OI Turnover", "交易行为与资金流", "conditional", "成交量与持仓量", "implemented", 0, "交易活跃度相对存量持仓刻画换手与拥挤"),
+    _s(24, "已实现波动率", "Realized Volatility", "波动率与风险", "risk", "合约收益", "implemented", 0, "历史二次变差估计未来风险状态"),
+    _s(25, "低波动", "Low Volatility", "波动率与风险", "risk", "合约收益", "implemented", 1, "低波动特征用于防御暴露与风险控制"),
+    _s(26, "已实现偏度", "Realized Skewness", "波动率与风险", "risk", "合约收益", "implemented", -1, "收益不对称刻画尾部风险与彩票偏好"),
+    _s(27, "季节性", "Seasonality", "价值与均值回复", "predictor", "历史同期收益", "implemented", 1, "生产消费季节周期可能形成重复价格模式"),
+    _s(28, "产业链残差", "Industry-Chain Residual", "产业链与相对价值", "predictor", "产业链图与价格", "missing_data", 0, "相对上下游合理状态的偏离可能修复或延续", "缺少经确认的产业链邻接表和经济系数"),
+    _s(29, "相对价值残差", "Relative-Value Residual", "价值与均值回复", "predictor", "板块与价格", "implemented_proxy", 1, "相对板块共同变化的偏离可能均值回复"),
+    _s(30, "市场状态条件因子", "Market-State Conditional Factor", "非线性交互", "conditional", "市场状态概率", "deferred", 0, "市场状态可能调节基础因子", "本阶段按确认方案暂不研究状态条件有效性"),
+    _s(31, "单品种状态交互", "Product-State Interaction", "非线性交互", "conditional", "单品种状态", "deferred", 0, "品种自身状态可能调节基础因子", "本阶段未定义产品状态引擎"),
+    _s(32, "因子动量", "Factor Momentum", "非线性交互", "conditional", "因子收益历史", "deferred", 0, "近期因子收益可能延续", "需先冻结基础因子组合与收益定义"),
+    _s(33, "基本面综合新息", "Fundamental Composite News", "信息冲击", "predictor", "多类基本面公布", "missing_data", 1, "多源供需新息聚合可降低单项噪声", "缺少真实发布时间和公布前预期"),
+    _s(34, "基本面反应不足", "Fundamental Underreaction", "信息冲击", "predictor", "基本面新息与初始价格反应", "missing_data", 1, "信息未被初始价格充分吸收可能产生延续", "基础新息不可计算且初始反应窗口尚无事件时间"),
+    _s(35, "信息一致性", "Information Consistency", "信息冲击", "predictor", "多类点时基本面", "missing_data", 1, "多源同向信息提高供需判断可信度", "严格点时基本面来源不足"),
+    _s(36, "信息背离", "Information Divergence", "信息冲击", "predictor", "基本面与价格", "missing_data", 0, "基本面与价格背离可能修复或延续", "严格点时基本面信号不可计算"),
+    _s(37, "成本传导缺口", "Cost Transmission Gap", "产业链与相对价值", "predictor", "产业配比与上下游价格", "missing_data", 1, "上游成本尚未传导到下游可能形成滞后", "缺少经确认的生产配比、成本项和产业链映射"),
+    _s(38, "加工利润异常", "Processing-Margin Anomaly", "产业链与相对价值", "predictor", "投入产出价格与成本", "missing_data", -1, "异常加工利润可能通过供给调整而修复", "缺少生产配比、其他成本和可靠现货口径"),
+    _s(39, "仓单新息", "Warehouse-Receipt Surprise", "信息冲击", "predictor", "仓单与预期", "missing_data", 1, "相对预期的仓单变化可能触发再定价", "仓单真实发布时间和公布前预期缺失"),
+    _s(40, "产业链传导残差", "Transmission Residual", "产业链与相对价值", "predictor", "产业链图、滞后与价格", "missing_data", 0, "剥离上游和板块后剩余冲击可能含个体信息", "缺少经确认的产业链邻接和传导滞后"),
+    _s(41, "动量质量", "Momentum Quality", "趋势与动量", "predictor", "动量与趋势效率", "implemented", 1, "平滑趋势比震荡路径更可能持续"),
+    _s(42, "波动率管理动量", "Volatility-Managed Momentum", "趋势与动量", "risk", "动量与波动率", "implemented", 1, "按波动缩放可稳定不同品种风险预算"),
+    _s(43, "特质波动", "Idiosyncratic Volatility", "波动率与风险", "risk", "收益与板块收益", "implemented_proxy", 0, "剔除共同冲击后的剩余风险刻画品种特异性"),
+    _s(44, "期限结构斜率", "Term-Structure Slope", "期限结构与Carry", "predictor", "全合约曲线", "implemented", 1, "整条曲线斜率比两点Carry更稳健"),
+    _s(45, "期限结构动量", "Term-Structure Momentum", "期限结构与Carry", "predictor", "全合约曲线", "implemented", 1, "曲线持续收紧可能代表供需冲击延续"),
+    _s(46, "期限结构加速度", "Term-Structure Acceleration", "期限结构与Carry", "predictor", "全合约曲线", "implemented", 1, "曲线收紧速度变化刻画供需冲击二阶变化"),
+    _s(47, "基差意外", "Basis Surprise", "基差与现货", "predictor", "现货基差与预期", "missing_data", 1, "超预期基差变化可能反映突发供需", "缺少真实现货价、发布时间和预期"),
+    _s(48, "库存加速度", "Inventory Acceleration", "库存与供需", "predictor", "库存", "missing_data", 1, "去库存速度加快可能强化紧张信号", "严格点时库存不可用"),
+    _s(49, "库存—价格背离", "Inventory-Price Divergence", "信息冲击", "predictor", "库存与价格", "missing_data", 1, "库存紧张尚未被价格吸收可能产生后续调整", "严格点时库存不可用"),
+    _s(50, "供需冲击", "Supply-Demand Shock", "库存与供需", "predictor", "供给需求公布与预期", "missing_data", 1, "需求正向与供给负向新息共同决定边际紧张", "缺少产量、需求、开工等真实发布时间与预期"),
+    _s(51, "拥挤度", "Crowding", "交易行为与资金流", "risk", "参与者持仓份额", "missing_data", -1, "持仓集中可能放大反转和流动性尾部风险", "现有会员数据是平均成本而非持仓份额"),
+    _s(52, "持仓意外", "Open-Interest Surprise", "交易行为与资金流", "predictor", "持仓量", "implemented", 0, "异常持仓变化刻画非正常资金进入或退出"),
+    _s(53, "量价背离", "Volume-Price Divergence", "交易行为与资金流", "conditional", "价格与成交量", "implemented", 0, "价格趋势缺少成交确认可能较脆弱"),
+    _s(54, "因子交互", "Factor Interaction", "非线性交互", "predictor", "基础因子", "implemented_limited", 0, "经济相关因子同时出现时可能产生非加性信息"),
+    _s(55, "非线性基本面", "Nonlinear Fundamental", "非线性交互", "predictor", "基本面信号", "missing_data", 1, "极端供需状态的价格影响可能非线性放大", "严格点时基本面信号不可用"),
+    _s(56, "商品网络", "Commodity Network Factor", "产业链与相对价值", "predictor", "商品网络与邻居信号", "missing_data", 0, "关联商品冲击可通过产业网络传播", "缺少经确认的网络边和权重"),
+    _s(57, "相关性风险", "Correlation Risk", "波动率与风险", "risk", "品种与市场收益", "implemented", -1, "相关性突然上升刻画系统性风险暴露"),
+)
+
+
+CATALOG_BY_ID = {spec.factor_id: spec for spec in FACTOR_CATALOG}

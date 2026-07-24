@@ -1,0 +1,255 @@
+study_name: "theme7_cn_commodity_futures_ml_factor_investing"
+paper_title: "机器学习能否改善中国商品期货因子投资？——基于动量、期限结构和流动性特征的研究"
+
+dataset_base:
+  universe: "china_commodity_futures_30"
+  sample_start: "2015-01-05"
+  sample_end: "2025-12-31"
+  development_start: "2015-01-05"
+  development_end: "2024-12-31"
+  sealed_period_start: "2025-01-01"
+  sealed_period_end: "2025-12-31"
+  panel_keys:
+    - "trade_date"
+    - "product"
+  identifier_columns:
+    - "trade_date"
+    - "product"
+    - "sector"
+  feature_file: "ml_features_development.csv.gz"
+  label_file: "labels_development.csv.gz"
+  registry_file: "ml_feature_registry.csv"
+  feature_source: "all 57 registered factors in feature_name column"
+  factor_count: 57
+  main_contract_rule: "use TuShare dominant continuous series and map to real tradable contracts; do not reselect dominant by T-1 open interest"
+  continuous_price_usage: "factor construction only"
+  tradable_return_usage: "strategy pnl only; open-to-open on mapped real contract"
+  fundamental_availability_rule: "if no explicit publish time, delay availability to next trading day"
+  spot_data_rules:
+    max_stale_days: 7
+    missing_spot_2024_2025: "set corresponding basis to missing"
+  strict_basis_exceptions:
+    - "FU"   # missing FX
+    - "SC"   # missing FX
+    - "I"    # missing dry/wet ton conversion
+  term_structure_rule: "use full contract curve; not only dominant and next-near"
+
+feature_base:
+  core_groups:
+    - "momentum"
+    - "term_structure"
+    - "liquidity"
+  extension_groups:
+    - "volatility"
+    - "skewness"
+    - "open_interest_change"
+    - "interaction_terms"
+    - "conditional_variables"
+  registration_policy:
+    all_57_enter_registry_and_screening: true
+    delete_highly_correlated_factors: false
+    required_artifacts:
+      - "cluster_ids"
+      - "representative_factor_tags"
+      - "full_feature_file"
+
+label_base:
+  available_targets:
+    - "future_return_1d"
+    - "future_return_5d"
+    - "future_return_20d"
+  default_target: "future_return_5d"
+  return_definition: "open_to_open on the same mapped real contract"
+
+split_base:
+  random_split_allowed: false
+  scheme: "expanding_window"
+  train_start_fixed: "2015-01-05"
+  purge_days_default: 5
+  folds:
+    - train: ["2015-01-05", "2018-12-31"]
+      valid: ["2019-01-01", "2019-12-31"]
+    - train: ["2015-01-05", "2019-12-31"]
+      valid: ["2020-01-01", "2020-12-31"]
+    - train: ["2015-01-05", "2020-12-31"]
+      valid: ["2021-01-01", "2021-12-31"]
+    - train: ["2015-01-05", "2021-12-31"]
+      valid: ["2022-01-01", "2022-12-31"]
+    - train: ["2015-01-05", "2022-12-31"]
+      valid: ["2023-01-01", "2023-12-31"]
+    - train: ["2015-01-05", "2023-12-31"]
+      valid: ["2024-01-01", "2024-12-31"]
+  sealed_test:
+    train: ["2015-01-05", "2024-12-31"]
+    test: ["2025-01-01", "2025-12-31"]
+    tuning_allowed: false
+
+execution_base:
+  protocol_role: "second_shared_base"
+  default_for_dashboard: true
+  signal_time: "T close"
+  execution_time: "T+1 open"
+  default_holding_days: 5
+  default_rebalance_frequency_days: 5
+  long_quantile: 0.2
+  short_quantile: 0.2
+  weighting: "equal_weight_within_side"
+  gross_leverage: 1.0
+  net_exposure: 0.0
+  base_cost_bps_one_way: 5
+  cost_scenarios_bps_one_way:
+    - 0
+    - 3
+    - 5
+    - 10
+  actual_exchange_fees_usage: "auxiliary_diagnosis_only"
+  roll_cost_recording: "separate"
+  turnover_recording: true
+
+trading_constraints:
+  limit_up_down_rule_required: true
+  illiquidity_filter_required: true
+  no_trade_delay_rule_required: true
+  same_constraints_for_all_models: true
+
+evaluation_base:
+  dashboard_metrics:
+    - "factor_return"
+    - "annual_return"
+    - "sharpe"
+    - "max_drawdown"
+    - "ic_mean"
+    - "rank_ic"
+    - "ic_std"
+    - "ic_ir"
+    - "ir"
+    - "p_ic_gt_002"
+    - "p_ic_lt_neg002"
+    - "t_stat"
+    - "p_value"
+    - "monotonicity"
+  prediction_metrics:
+    - "pearson_ic"
+    - "rank_ic"
+    - "yearly_rank_ic"
+  portfolio_metrics:
+    - "annual_return"
+    - "annual_volatility"
+    - "sharpe"
+    - "max_drawdown"
+    - "calmar"
+    - "turnover"
+  inference_metrics:
+    - "hac_tstat"
+    - "hac_pvalue"
+    - "block_bootstrap_ci"
+  dashboard_metric_definitions:
+    factor_return: "sample-period cumulative long-short return under the execution base"
+    annual_return: "annualized return from daily portfolio returns under the execution base"
+    sharpe: "annualized Sharpe ratio under the execution base"
+    max_drawdown: "max drawdown of the cumulative equity curve"
+    ic_mean: "mean daily IC"
+    rank_ic: "mean daily Rank IC"
+    ic_std: "standard deviation of daily IC"
+    ic_ir: "ic_mean divided by ic_std"
+    ir: "annualized information ratio versus the unified benchmark"
+    p_ic_gt_002: "share of daily IC above 0.02"
+    p_ic_lt_neg002: "share of daily IC below -0.02"
+    t_stat: "HAC t-statistic for the primary test object"
+    p_value: "HAC p-value for the primary test object"
+    monotonicity: "group return monotonicity score"
+  robustness_axes:
+    holding_periods:
+      - 1
+      - 5
+      - 20
+    signal_delay_days:
+      - 0
+      - 1
+    sector_breakdown:
+      - "energy"
+      - "metals"
+      - "chemicals"
+      - "agriculture"
+    liquidity_filter:
+      - "full_universe"
+      - "drop_bottom_20pct_liquidity"
+
+model_base:
+  baselines:
+    - "single_factor_sorting"
+    - "equal_weight_multi_factor"
+    - "linear_regression"
+    - "ridge"
+    - "lasso_or_elasticnet"
+  main_ml_models:
+    - "lightgbm"
+    - "xgboost"
+  optional_extensions:
+    - "random_forest"
+    - "mlp"
+    - "lstm_or_gru"
+    - "gnn"
+  fairness_rules:
+    same_features: true
+    same_target: true
+    same_time_split: true
+    same_execution_protocol: true
+    same_cost_assumptions: true
+    same_output_schema: true
+
+required_outputs:
+  experiment_level:
+    - "predictions"
+    - "positions"
+    - "daily_returns"
+    - "metrics_summary"
+    - "rank_ic_summary"
+    - "cost_sensitivity"
+    - "feature_importance_or_coefficients"
+    - "experiment_config"
+  paper_level:
+    - "data_description_table"
+    - "factor_definition_table"
+    - "single_factor_table"
+    - "model_comparison_table"
+    - "cost_sensitivity_table"
+    - "holding_period_robustness_table"
+    - "yearly_performance_table"
+    - "sector_performance_table"
+    - "feature_importance_table"
+    - "ablation_table"
+
+project_hygiene:
+  keep:
+    - "data_final_raw"
+    - "protocols"
+    - "57_factor_documentation"
+    - "source_code"
+    - "unit_tests"
+  delete:
+    - "old_results"
+    - "old_handover_packages"
+    - "duplicate_project_copies"
+  teammate_handover_package:
+    - "precomputed_features_and_labels"
+    - "fold_definitions"
+    - "feature_registry"
+    - "sample_training_code"
+    requirement: "teammates can train without raw underlying data"
+
+change_control:
+  allowed_changes:
+    - "predictive_model"
+    - "hyperparameters"
+    - "explainability_methods"
+    - "clearly_labeled_extension_experiments"
+  forbidden_changes:
+    - "model_specific_sample_period"
+    - "model_specific_universe"
+    - "model_specific_holding_period"
+    - "model_specific_cost_assumption"
+    - "model_specific_rebalance_rule"
+    - "model_specific_execution_relaxation"
+    - "reselect_dominant_by_T-1_open_interest"
+    - "physically_delete_highly_correlated_factors"

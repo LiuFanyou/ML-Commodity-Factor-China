@@ -1,0 +1,16 @@
+data_type,source,strict_point_in_time_usable,coverage,note
+价格/OHLC,market_contract_daily,True,2015-2025,严格点时可用
+成交量,market_contract_daily,True,2015-2025,严格点时可用
+成交额,market_contract_daily,True,2015-2025,原始单位保留，适合品种内标准化
+持仓量,market_contract_daily,True,2015-2025,严格点时可用
+全合约期限结构,market_contract_daily,True,2015-2025,动态流动性准入
+主力选择,main_selection_daily,True,2015-2025,当日收盘选择，下一交易日可用
+可交易基础收益,research_returns_daily,True,2015-2025,前日选择合约的次日开收收益
+真实现货价格,无,False,无,旧现货文件实为会员成本
+新仓单,warehouse_receipts_daily_new,False,2015-2025,真实公布时间未确认
+新库存/可用量,warehouse_inventory_periodic_new,False,2015-2025,公布时间及字段语义未确认
+旧库存,legacy_inventory_weekly,False,2020-2025,仅有假定可用日，单位和语义部分未确认
+旧仓单,legacy_warehouse_receipts_weekly,False,2020-2025,覆盖8个品种且仅有假定可用日
+商业交易者分类持仓,无,False,无,会员成本不能替代持仓份额
+产业链配比/成本,无,False,无,缺少确认后的产业图、配比和成本
+手续费与合约乘数,contract_rules/metadata,False,2015-2025,手续费单位及乘数未完成核验

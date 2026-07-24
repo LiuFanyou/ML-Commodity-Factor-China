@@ -1,0 +1,73 @@
+{
+  "run_version": "expanding_2015_v1",
+  "dataset_version": "CORE30_V1",
+  "data_root": "data_research/core30_v1",
+  "output_root": "runs/expanding_2015_v1",
+  "development_start": "2015-01-01",
+  "development_end": "2025-12-31",
+  "sealed_start": "2026-01-01",
+  "sealed_end": "2026-12-31",
+  "walk_forward": {
+    "mode": "expanding",
+    "train_start_year": 2015,
+    "first_oos_year": 2019,
+    "last_oos_year": 2025,
+    "minimum_inner_train_years": 3
+  },
+  "labels": {
+    "primary_horizon": 5,
+    "horizons": [1, 5, 20],
+    "signal_time": "trade_date_close",
+    "execution_time": "next_trading_day_open",
+    "daily_return_column": "primary_return",
+    "multi_day_convention": "compound_next_h_daily_open_to_close_returns_with_daily_reentry"
+  },
+  "lookbacks": {
+    "short": [5, 20],
+    "trend": [20, 60, 120],
+    "curve": [5, 20, 60],
+    "risk": [20, 60, 120]
+  },
+  "curve": {
+    "minimum_days_to_delisting": 10,
+    "maximum_days_to_delisting": 365,
+    "minimum_contracts_for_slope": 2,
+    "minimum_contracts_for_curvature": 3,
+    "price_column": "close",
+    "slope_weight": "sqrt_open_interest"
+  },
+  "screening": {
+    "minimum_cross_section_assets": 8,
+    "minimum_factor_coverage": 0.35,
+    "fdr_method": "benjamini_hochberg",
+    "fdr_q": 0.10,
+    "correlation_cluster_threshold": 0.85,
+    "newey_west_lag_by_horizon": true,
+    "two_way_cluster_inference": true,
+    "quantile_groups": 5,
+    "annualization_days": 252,
+    "cost_bps_one_way": [1, 3, 5]
+  },
+  "features": {
+    "mad_clip": 5.0,
+    "missing_indicator_threshold": 0.01,
+    "maximum_missing_rate": 0.65,
+    "cross_sectional_standardization": true,
+    "fold_train_only_scaling": true,
+    "pre_registered_interactions": [
+      ["tsmom_60", "carry"],
+      ["momentum_quality_60", "carry"],
+      ["tsmom_20", "oi_surprise_20"]
+    ]
+  },
+  "model": {
+    "raw_return_column": "future_return_1d",
+    "model_target_column": "target_cs_rank_1d",
+    "purge_trading_days": 1,
+    "alpha_grid": [0.01, 0.1, 1.0, 10.0, 100.0],
+    "fallback_alpha": 1.0,
+    "long_short_fraction": 0.2,
+    "one_way_cost_bps": [1.0, 3.0, 5.0],
+    "annualization": 252
+  }
+}

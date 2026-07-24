@@ -1,0 +1,58 @@
+factor_id,factor_name,factor_name_en,category,data_source,implementation_status,economic_meaning,classification,classification_reason,representative_feature,computable,enter_ml
+1,时间序列动量,Time-Series Momentum,趋势与动量,合约收益,implemented,价格冲击与机构调仓可能形成中期延续,B,相对固定基准模型提供样本外增量信息,tsmom_120,True,True
+2,横截面动量,Cross-Sectional Momentum,趋势与动量,合约收益,implemented,过去相对强势品种可能继续跑赢弱势品种,B,相对固定基准模型提供样本外增量信息,csmom_120,True,True
+3,趋势效率,Trend Efficiency,趋势与动量,合约收益,implemented,区分平滑趋势与高噪声路径,C,经济角色主要是条件变量而非独立方向信号,trend_efficiency_60,True,True
+4,多周期趋势一致性,Multi-Horizon Trend Consistency,趋势与动量,合约收益,implemented,多个周期同向可降低单一参数偶然性,E,开发期未发现足够稳定的方向或增量证据,multi_horizon_trend,True,False
+5,Carry,Carry,期限结构与Carry,全合约曲线,implemented,期限结构反映便利收益、库存压力与持有补偿,A,FDR后显著、方向一致且分组收益同向,carry,True,True
+6,Carry变化,Carry Change,期限结构与Carry,全合约曲线,implemented,期限结构边际收紧可能先于价格调整,B,相对固定基准模型提供样本外增量信息,carry_change_20,True,True
+7,基差,Basis,基差与现货,现货与期货,missing_data,现货相对期货强弱反映近端供需,F,现有所谓现货文件实为会员成本，不是可比现货价,,False,False
+8,基差冲击,Basis Shock,基差与现货,现货与期货,missing_data,异常基差变化可能代表供需新息,F,缺少可比且按真实发布时间对齐的现货价格,,False,False
+9,基差动量,Basis Momentum,期限结构与Carry,近远月合约,implemented,近月相对远月走强刻画曲线动态收紧,B,相对固定基准模型提供样本外增量信息,basis_momentum_5,True,True
+10,期限结构曲率,Curve Curvature,期限结构与Carry,至少三个流动合约,implemented,曲线中部异常可能反映局部供需与换月压力,B,存在预测或增量信息，但经济方向未预先固定，暂列辅助,curve_curvature,True,True
+11,价值因子,Value,价值与均值回复,合约收益,implemented,价格对历史锚点的偏离可能修复,E,开发期未发现足够稳定的方向或增量证据,value_120,True,False
+12,短期反转,Short-Term Reversal,价值与均值回复,合约收益,implemented,短期流动性冲击与过度反应可能反向修复,B,相对固定基准模型提供样本外增量信息,reversal_5,True,True
+13,库存稀缺,Inventory Scarcity,库存与供需,库存,missing_data,低季节调整库存代表稀缺与高便利收益,F,严格点时库存没有真实available_date且字段语义未确认,,False,False
+14,库存变化,Inventory Change,库存与供需,库存,missing_data,去库存表示供需边际趋紧,F,严格点时库存没有真实available_date且字段语义未确认,,False,False
+15,库存意外,Inventory Surprise,信息冲击,库存与预期,missing_data,相对预期的库存新息可能触发再定价,F,缺少真实发布时间与公布前预期,,False,False
+16,仓单紧张,Warehouse Receipt Tightness,库存与供需,注册仓单,missing_data,低仓单可能反映可交割供给紧张,F,仓单真实发布时间未确认，point_in_time_usable均为False,,False,False
+17,供需紧张度,Tightness,库存与供需,库存、仓单、基差、Carry,missing_data,多源一致的紧张信号可能提高可信度,F,库存、仓单和现货基差缺少严格点时数据,,False,False
+18,持仓量增长,Open-Interest Growth,交易行为与资金流,持仓量,implemented,新增持仓刻画资金进入与风险承担,B,存在预测或增量信息，但经济方向未预先固定，暂列辅助,oi_growth_5,True,True
+19,价格—持仓量交互,Price-OI Interaction,交易行为与资金流,价格与持仓量,implemented,价格与新增持仓同向可能确认趋势,B,相对固定基准模型提供样本外增量信息,price_oi_20,True,True
+20,套保压力,Hedging Pressure,交易行为与资金流,商业交易者分类持仓,missing_data,套保需求可能向风险承担者支付补偿,F,没有可靠Commercial/Non-commercial分类持仓,,False,False
+21,成交量冲击,Volume Shock,交易行为与资金流,成交量,implemented,异常成交代表关注、信息或流动性冲击,C,经济角色主要是条件变量而非独立方向信号,volume_shock_20,True,True
+22,Amihud非流动性,Amihud Illiquidity,交易行为与资金流,收益与成交额,implemented,单位成交额价格冲击刻画流动性风险,D,主要用途是风险、波动或流动性刻画,amihud_20,True,True
+23,成交量—持仓量换手率,Volume-OI Turnover,交易行为与资金流,成交量与持仓量,implemented,交易活跃度相对存量持仓刻画换手与拥挤,C,经济角色主要是条件变量而非独立方向信号,volume_oi_turnover,True,True
+24,已实现波动率,Realized Volatility,波动率与风险,合约收益,implemented,历史二次变差估计未来风险状态,D,主要用途是风险、波动或流动性刻画,realized_vol_20,True,False
+25,低波动,Low Volatility,波动率与风险,合约收益,implemented,低波动特征用于防御暴露与风险控制,D,主要用途是风险、波动或流动性刻画,low_vol_20,True,True
+26,已实现偏度,Realized Skewness,波动率与风险,合约收益,implemented,收益不对称刻画尾部风险与彩票偏好,D,主要用途是风险、波动或流动性刻画,realized_skew_120,True,True
+27,季节性,Seasonality,价值与均值回复,历史同期收益,implemented,生产消费季节周期可能形成重复价格模式,B,相对固定基准模型提供样本外增量信息,seasonality_3y_month,True,True
+28,产业链残差,Industry-Chain Residual,产业链与相对价值,产业链图与价格,missing_data,相对上下游合理状态的偏离可能修复或延续,F,缺少经确认的产业链邻接表和经济系数,,False,False
+29,相对价值残差,Relative-Value Residual,价值与均值回复,板块与价格,implemented_proxy,相对板块共同变化的偏离可能均值回复,E,开发期未发现足够稳定的方向或增量证据,relative_value_residual_60,True,False
+30,市场状态条件因子,Market-State Conditional Factor,非线性交互,市场状态概率,deferred,市场状态可能调节基础因子,E,本阶段按确认方案暂不研究状态条件有效性,,False,False
+31,单品种状态交互,Product-State Interaction,非线性交互,单品种状态,deferred,品种自身状态可能调节基础因子,E,本阶段未定义产品状态引擎,,False,False
+32,因子动量,Factor Momentum,非线性交互,因子收益历史,deferred,近期因子收益可能延续,E,需先冻结基础因子组合与收益定义,,False,False
+33,基本面综合新息,Fundamental Composite News,信息冲击,多类基本面公布,missing_data,多源供需新息聚合可降低单项噪声,F,缺少真实发布时间和公布前预期,,False,False
+34,基本面反应不足,Fundamental Underreaction,信息冲击,基本面新息与初始价格反应,missing_data,信息未被初始价格充分吸收可能产生延续,F,基础新息不可计算且初始反应窗口尚无事件时间,,False,False
+35,信息一致性,Information Consistency,信息冲击,多类点时基本面,missing_data,多源同向信息提高供需判断可信度,F,严格点时基本面来源不足,,False,False
+36,信息背离,Information Divergence,信息冲击,基本面与价格,missing_data,基本面与价格背离可能修复或延续,F,严格点时基本面信号不可计算,,False,False
+37,成本传导缺口,Cost Transmission Gap,产业链与相对价值,产业配比与上下游价格,missing_data,上游成本尚未传导到下游可能形成滞后,F,缺少经确认的生产配比、成本项和产业链映射,,False,False
+38,加工利润异常,Processing-Margin Anomaly,产业链与相对价值,投入产出价格与成本,missing_data,异常加工利润可能通过供给调整而修复,F,缺少生产配比、其他成本和可靠现货口径,,False,False
+39,仓单新息,Warehouse-Receipt Surprise,信息冲击,仓单与预期,missing_data,相对预期的仓单变化可能触发再定价,F,仓单真实发布时间和公布前预期缺失,,False,False
+40,产业链传导残差,Transmission Residual,产业链与相对价值,产业链图、滞后与价格,missing_data,剥离上游和板块后剩余冲击可能含个体信息,F,缺少经确认的产业链邻接和传导滞后,,False,False
+41,动量质量,Momentum Quality,趋势与动量,动量与趋势效率,implemented,平滑趋势比震荡路径更可能持续,B,相对固定基准模型提供样本外增量信息,momentum_quality_120,True,True
+42,波动率管理动量,Volatility-Managed Momentum,趋势与动量,动量与波动率,implemented,按波动缩放可稳定不同品种风险预算,D,主要用途是风险、波动或流动性刻画,vol_managed_momentum_60,True,True
+43,特质波动,Idiosyncratic Volatility,波动率与风险,收益与板块收益,implemented_proxy,剔除共同冲击后的剩余风险刻画品种特异性,D,主要用途是风险、波动或流动性刻画,idiosyncratic_vol_60,True,True
+44,期限结构斜率,Term-Structure Slope,期限结构与Carry,全合约曲线,implemented,整条曲线斜率比两点Carry更稳健,A,FDR后显著、方向一致且分组收益同向,term_structure_slope,True,True
+45,期限结构动量,Term-Structure Momentum,期限结构与Carry,全合约曲线,implemented,曲线持续收紧可能代表供需冲击延续,B,相对固定基准模型提供样本外增量信息,term_structure_momentum_5,True,True
+46,期限结构加速度,Term-Structure Acceleration,期限结构与Carry,全合约曲线,implemented,曲线收紧速度变化刻画供需冲击二阶变化,B,相对固定基准模型提供样本外增量信息,term_structure_acceleration_5,True,True
+47,基差意外,Basis Surprise,基差与现货,现货基差与预期,missing_data,超预期基差变化可能反映突发供需,F,缺少真实现货价、发布时间和预期,,False,False
+48,库存加速度,Inventory Acceleration,库存与供需,库存,missing_data,去库存速度加快可能强化紧张信号,F,严格点时库存不可用,,False,False
+49,库存—价格背离,Inventory-Price Divergence,信息冲击,库存与价格,missing_data,库存紧张尚未被价格吸收可能产生后续调整,F,严格点时库存不可用,,False,False
+50,供需冲击,Supply-Demand Shock,库存与供需,供给需求公布与预期,missing_data,需求正向与供给负向新息共同决定边际紧张,F,缺少产量、需求、开工等真实发布时间与预期,,False,False
+51,拥挤度,Crowding,交易行为与资金流,参与者持仓份额,missing_data,持仓集中可能放大反转和流动性尾部风险,F,现有会员数据是平均成本而非持仓份额,,False,False
+52,持仓意外,Open-Interest Surprise,交易行为与资金流,持仓量,implemented,异常持仓变化刻画非正常资金进入或退出,B,存在预测或增量信息，但经济方向未预先固定，暂列辅助,oi_surprise_60,True,True
+53,量价背离,Volume-Price Divergence,交易行为与资金流,价格与成交量,implemented,价格趋势缺少成交确认可能较脆弱,C,经济角色主要是条件变量而非独立方向信号,volume_price_divergence_20,True,True
+54,因子交互,Factor Interaction,非线性交互,基础因子,implemented_limited,经济相关因子同时出现时可能产生非加性信息,B,存在预测或增量信息，但经济方向未预先固定，暂列辅助,interaction__tsmom_20__oi_surprise_20,True,True
+55,非线性基本面,Nonlinear Fundamental,非线性交互,基本面信号,missing_data,极端供需状态的价格影响可能非线性放大,F,严格点时基本面信号不可用,,False,False
+56,商品网络,Commodity Network Factor,产业链与相对价值,商品网络与邻居信号,missing_data,关联商品冲击可通过产业网络传播,F,缺少经确认的网络边和权重,,False,False
+57,相关性风险,Correlation Risk,波动率与风险,品种与市场收益,implemented,相关性突然上升刻画系统性风险暴露,D,主要用途是风险、波动或流动性刻画,correlation_risk_20_120,True,True

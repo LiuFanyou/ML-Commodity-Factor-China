@@ -1,0 +1,28 @@
+{
+  "model_version": "linear_ridge_v1_supplemental_2025",
+  "feature_file": "features/ml_features.csv.gz",
+  "registry_file": "training_handoff/ml_feature_registry.csv",
+  "raw_return_column": "future_return_1d",
+  "model_target_column": "target_cs_rank_1d",
+  "train_start_year": 2022,
+  "train_end_year": 2024,
+  "test_year": 2025,
+  "rolling_train_years": 3,
+  "purge_trading_days": 1,
+  "alpha_grid": [
+    0.01,
+    0.1,
+    1.0,
+    10.0,
+    100.0
+  ],
+  "fallback_alpha": 1.0,
+  "long_short_fraction": 0.2,
+  "one_way_cost_bps": [
+    1.0,
+    3.0,
+    5.0
+  ],
+  "annualization": 252,
+  "output_directory": "modeling/linear_ridge_v1/supplemental_2025"
+}
