@@ -203,6 +203,13 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Local commodity-futures data, model checkpoints and generated delivery files
+training_handoff/
+交付/
+*.zip
+*.csv
+*.csv.gz
+
 # Ruff stuff:
 .ruff_cache/
 
