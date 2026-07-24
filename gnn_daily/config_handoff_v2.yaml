@@ -1,0 +1,38 @@
+seed: 42
+handoff_dir: ../training_handoff_v2/training_handoff
+main_csv: ../futures_main_contract_daily_30varieties_2015_2025.csv
+output_dir: artifacts_handoff_gnn_v2
+development_end: "2023-12-31"
+reuse_auxiliary_panel: artifacts_handoff_gnn/prepared/protocol_panel.npz
+
+data:
+  input_window: 20
+  cpd_window: 60
+  cpd_threshold: 0.05
+  cpd_model: l2
+  cpd_n_bkps: 3
+  cpd_min_size: 5
+  cpd_jump: 1
+  cpd_n_jobs: -1
+
+model:
+  hidden_dim: 64
+  attention_dim: 32
+  temporal_kernel: 3
+  num_blocks: 2
+  dropout: 0.10
+
+training:
+  epochs_per_task: 100
+  batch_size: 64
+  learning_rate: 0.002
+  weight_decay: 0.0001
+  lambda_encoder: 0.00001
+  lambda_heads: 0.00001
+  patience: 15
+  device: auto
+  num_workers: 0
+
+variants:
+  protocol_gnn: [price]
+  hcgnn_continual: [cpd, gap, ma, price]

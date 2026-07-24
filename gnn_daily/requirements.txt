@@ -1,0 +1,8 @@
+numpy>=1.23
+pandas>=1.5
+scikit-learn>=1.1
+torch>=2.0
+PyYAML>=6.0
+ruptures>=1.1.10
+matplotlib>=3.6
+tabulate>=0.9

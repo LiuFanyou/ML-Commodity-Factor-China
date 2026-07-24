@@ -203,6 +203,14 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# HCGNN local datasets, checkpoints, and generated tabular outputs
+gnn_daily/artifacts*/
+gnn_daily/training_handoff*/
+gnn_daily/*.tar
+gnn_daily/*.zip
+results/hcgnn_v2/tables/
+results/hcgnn_v2/*.csv
+
 # Ruff stuff:
 .ruff_cache/
 
