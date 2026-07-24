@@ -1,0 +1,37 @@
+{
+  "project_version": "cn_futures_factor_science_data_final_v1",
+  "development_end": "2024-12-31",
+  "sealed_year_included": false,
+  "key_columns": [
+    "trade_date",
+    "product",
+    "sector"
+  ],
+  "feature_registry": "ml_feature_registry.csv",
+  "feature_rule": "use every feature_name row",
+  "primary_target": "future_return_5d",
+  "target_file": "labels_development.csv.gz",
+  "one_file_dataset": "ml_dataset_development.csv.gz",
+  "split_file": "fold_definitions.csv",
+  "purge_rule": "train label_end_date_5d must be earlier than valid_start",
+  "random_split_forbidden": true,
+  "feature_selection_uses_target": false,
+  "main_contract_rule_amendment": "direct data_final_raw TuShare continuous main series mapped to an actual contract at T close; T-1 OI reselection explicitly waived",
+  "label_rule": "signal at T close; hold the mapped actual contract from T+1 open to T+h+1 open; suspected locked entry/exit is excluded",
+  "strategy_protocol": {
+    "holding_days": 5,
+    "rebalance_frequency_days": 5,
+    "long_fraction": 0.2,
+    "short_fraction": 0.2,
+    "gross_leverage": 1.0,
+    "net_exposure": 0.0,
+    "base_cost_bps_one_way": 5,
+    "cost_scenarios_bps_one_way": [
+      0,
+      3,
+      5,
+      10
+    ],
+    "actual_fee_usage": "diagnostic_only"
+  }
+}

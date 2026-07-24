@@ -1,0 +1,31 @@
+# macOS / Python caches
+.DS_Store
+**/.DS_Store
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Raw market data — never commit
+data_final_raw/
+data_raw/
+data_new/
+data_research/
+data3/
+
+# Regenerable heavy intermediates / train matrices
+outputs/intermediate/
+**/*.csv.gz
+**/*.parquet
+
+# Temporary / archives
+*.tmp
+*.temp
+*.log
+*.zip

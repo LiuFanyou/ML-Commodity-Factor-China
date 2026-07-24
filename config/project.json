@@ -1,0 +1,104 @@
+{
+  "project_version": "cn_futures_factor_science_data_final_v1",
+  "data": {
+    "contract_file": "data_final_raw/futures_contract_daily_30varieties_2015_2025.csv",
+    "data_dictionary": "data_final_raw/futures_contract_daily_30varieties_2015_2025字段说明.md",
+    "continuous_daily_glob": "data_final_raw/tushare_theme7/*/fut_daily_raw.csv",
+    "continuous_exchange_suffix": {
+      "SHFE": "SHF",
+      "DCE": "DCE",
+      "CZCE": "ZCE",
+      "INE": "INE"
+    },
+    "spot_unit_excluded_products": ["FU", "I", "SC"],
+    "point_in_time": {
+      "release_lag_trading_days": 1,
+      "spot_max_age_calendar_days": 7,
+      "warehouse_max_age_calendar_days": 5,
+      "stock_max_age_calendar_days": 14
+    }
+  },
+  "factor_library": "中国商品期货Alpha因子库V2.1_分类版.md",
+  "protocol_markdown": "最终协议/UNIFIED_EXPERIMENT_PROTOCOL.md",
+  "protocol_yaml": "最终协议/unified_experiment_protocol.yaml",
+  "sample": {
+    "start": "2015-01-05",
+    "development_end": "2024-12-31",
+    "sealed_start": "2025-01-01",
+    "end": "2025-12-31"
+  },
+  "main_contract": {
+    "rule": "direct_tushare_continuous_series_mapped_to_actual_contract",
+    "t_minus_1_selection_required": false,
+    "mapping_match_fields": ["pre_close", "pre_settle", "open", "high", "low", "close", "settle"],
+    "mapping_tie_break": ["prior_contract", "highest_open_interest", "highest_volume", "latest_delist"],
+    "prohibit_maturity_backtracking": true
+  },
+  "curve": {
+    "minimum_days_to_delist": 10,
+    "maximum_days_to_delist": 365,
+    "minimum_open_interest_share": 0.01,
+    "minimum_volume_share": 0.01,
+    "minimum_points_for_slope": 3
+  },
+  "labels": {
+    "horizons": [1, 5, 20],
+    "primary": "future_return_5d",
+    "signal_time": "T_close",
+    "entry_time": "T_plus_1_open",
+    "exit_rule": "same_actual_contract_open_to_open",
+    "exclude_suspected_locked_entry_or_exit": true
+  },
+  "screening": {
+    "evaluation_start": "2019-01-01",
+    "evaluation_end": "2024-12-31",
+    "minimum_cross_section": 8,
+    "minimum_dense_coverage": 0.2,
+    "minimum_event_observations": 100,
+    "minimum_event_instruments": 5,
+    "correlation_threshold": 0.9,
+    "quantiles": 5
+  },
+  "feature_processing": {
+    "mad_clip": 5.0,
+    "rolling_z_window": 252,
+    "rolling_z_minimum": 60,
+    "missing_indicator_threshold": 0.01,
+    "cross_sectional_standardization": true,
+    "target_based_feature_selection": false,
+    "retain_correlated_features": true
+  },
+  "execution": {
+    "holding_days": 5,
+    "rebalance_frequency_days": 5,
+    "long_fraction": 0.2,
+    "short_fraction": 0.2,
+    "gross_leverage": 1.0,
+    "net_exposure": 0.0,
+    "base_cost_bps_one_way": 5,
+    "cost_scenarios_bps_one_way": [0, 3, 5, 10],
+    "actual_fee_usage": "diagnostic_only"
+  },
+  "folds": [
+    {"fold_id": "fold_2019", "train_start": "2015-01-05", "train_end": "2018-12-31", "valid_start": "2019-01-01", "valid_end": "2019-12-31", "purge_days": 5},
+    {"fold_id": "fold_2020", "train_start": "2015-01-05", "train_end": "2019-12-31", "valid_start": "2020-01-01", "valid_end": "2020-12-31", "purge_days": 5},
+    {"fold_id": "fold_2021", "train_start": "2015-01-05", "train_end": "2020-12-31", "valid_start": "2021-01-01", "valid_end": "2021-12-31", "purge_days": 5},
+    {"fold_id": "fold_2022", "train_start": "2015-01-05", "train_end": "2021-12-31", "valid_start": "2022-01-01", "valid_end": "2022-12-31", "purge_days": 5},
+    {"fold_id": "fold_2023", "train_start": "2015-01-05", "train_end": "2022-12-31", "valid_start": "2023-01-01", "valid_end": "2023-12-31", "purge_days": 5},
+    {"fold_id": "fold_2024", "train_start": "2015-01-05", "train_end": "2023-12-31", "valid_start": "2024-01-01", "valid_end": "2024-12-31", "purge_days": 5}
+  ],
+  "sealed_fold": {
+    "fold_id": "sealed_2025",
+    "train_start": "2015-01-05",
+    "train_end": "2024-12-31",
+    "valid_start": "2025-01-01",
+    "valid_end": "2025-12-31",
+    "purge_days": 5
+  },
+  "sector_map": {
+    "energy": ["BU", "FU", "SC"],
+    "metals": ["AG", "AL", "AU", "CU", "HC", "I", "J", "JM", "NI", "RB", "SF", "SN", "ZN"],
+    "chemicals": ["L", "MA", "PP", "SA", "TA", "V"],
+    "agriculture": ["C", "CF", "CS", "M", "P", "RM", "SR", "Y"]
+  }
+}
