@@ -64,3 +64,20 @@ python modeling/linear_ridge_v1/run.py
 - `outputs/coefficient_summary.csv`
 - `outputs/daily_prediction_ic.csv`
 - `outputs/run_summary.json`
+
+## 2025 补充回测报告
+
+仓库里已有一份**旧口径**补充报告（1日开盘→收盘、59 字段）：
+
+- 报告：`supplemental_2025/supplemental_2025_report.md`
+- 原命令：`py -m factor_modeling.supplemental_2025 --config modeling/linear_ridge_v1/supplemental_2025_config.json`
+- 全量重跑需要 `features/ml_features.csv.gz`（gitignore）+ `data_research/`；结果目录禁止覆盖
+- 若只需重写 Markdown：`py modeling/linear_ridge_v1/run_supplemental_2025.py --from-artifacts`
+
+当前 handoff Ridge（5 日协议、92 字段）的 2025 补充入口：
+
+```bash
+py modeling/linear_ridge_v1/run_supplemental_2025_protocol.py
+```
+
+默认读取项目根目录 `ml_2025_backtest_pack/`（2025 特征 + 评价标签），训练仍只用 `training_handoff`（2015—2024）。结果写入 `supplemental_2025_protocol/`，禁止覆盖。

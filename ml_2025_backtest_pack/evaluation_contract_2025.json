@@ -1,0 +1,47 @@
+{
+  "pack_name": "ml_2025_backtest_pack",
+  "purpose": "Apply a model trained on development handoff to 2025 panel and evaluate under the unified execution protocol.",
+  "sample": {
+    "start": "2025-01-02",
+    "end": "2025-12-31",
+    "rows": 7290,
+    "products": 30
+  },
+  "key_columns": [
+    "trade_date",
+    "product",
+    "sector"
+  ],
+  "feature_file": "ml_features_2025.csv.gz",
+  "label_file": "labels_2025_evaluator_only.csv.gz",
+  "feature_registry": "ml_feature_registry.csv",
+  "feature_rule": "use every feature_name row; same 92 inputs as development",
+  "primary_target": "future_return_5d",
+  "join_keys": [
+    "trade_date",
+    "product"
+  ],
+  "model_source": "Train only on training_handoff (development through 2024). Do not refit hyperparameters on 2025.",
+  "label_rule": "signal at T close; hold the mapped actual contract from T+1 open to T+h+1 open; suspected locked entry/exit is excluded",
+  "strategy_protocol": {
+    "holding_days": 5,
+    "rebalance_frequency_days": 5,
+    "long_fraction": 0.2,
+    "short_fraction": 0.2,
+    "gross_leverage": 1.0,
+    "net_exposure": 0.0,
+    "base_cost_bps_one_way": 5,
+    "cost_scenarios_bps_one_way": [
+      0,
+      3,
+      5,
+      10
+    ],
+    "actual_fee_usage": "diagnostic_only"
+  },
+  "notes": [
+    "ml_features_2025 has no NaNs in feature columns after upstream processing.",
+    "Drop rows where future_return_5d is missing or entry/exit execution flags fail before portfolio evaluation.",
+    "Signal at T close, trade at T+1 open, 5-day hold, rebalance every 5 days, top/bottom 20%, equal weight within side, 5 bps one-way base cost."
+  ]
+}

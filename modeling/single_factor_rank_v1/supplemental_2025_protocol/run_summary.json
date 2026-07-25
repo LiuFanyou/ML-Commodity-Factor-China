@@ -1,0 +1,12 @@
+{
+  "status": "completed_once",
+  "model_version": "single_factor_rank_v1_supplemental_2025_protocol",
+  "test_year": 2025,
+  "features": 92,
+  "factors_evaluated": 92,
+  "top_feature": "amihud_20__csz",
+  "top_rank_ic": 0.11144923061957963,
+  "mean_rank_ic": -0.015027365534224768,
+  "mean_net_5bps_sharpe": -2.468336206457016,
+  "report": "D:\\软件2\\AI-15-demo-main\\--main2\\--main - 副本 (3)\\modeling\\single_factor_rank_v1\\supplemental_2025_protocol\\supplemental_2025_protocol_report.md"
+}

@@ -1,0 +1,13 @@
+{
+  "status": "completed_once",
+  "model_version": "equal_weight_multi_v1_supplemental_2025_protocol",
+  "test_year": 2025,
+  "features": 92,
+  "universe_size": 92,
+  "rank_ic_mean": -0.06289004821933186,
+  "gross_sharpe": -0.9843904430564865,
+  "net_5bps_sharpe": -1.891464699834298,
+  "gross_annual_return": -0.05469593912441914,
+  "net_5bps_annual_return": -0.10509593912441914,
+  "report": "D:\\软件2\\AI-15-demo-main\\--main2\\--main - 副本 (3)\\modeling\\equal_weight_multi_v1\\supplemental_2025_protocol\\supplemental_2025_protocol_report.md"
+}

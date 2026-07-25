@@ -1,0 +1,2 @@
+test_year,factors_evaluated,mean_rank_ic,mean_gross_sharpe,mean_net_5bps_sharpe,top_feature,top_rank_ic
+2025,92,-0.015027365534224768,-1.5121517698511677,-2.468336206457016,amihud_20__csz,0.11144923061957963

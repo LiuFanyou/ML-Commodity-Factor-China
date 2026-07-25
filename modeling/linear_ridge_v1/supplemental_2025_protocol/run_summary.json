@@ -1,0 +1,14 @@
+{
+  "status": "completed_once",
+  "test_year": 2025,
+  "features": 92,
+  "pack_2025_directory": "ml_2025_backtest_pack",
+  "selected_alpha": 0.01,
+  "rank_ic_mean": 0.022600341263970078,
+  "gross_annual_return": -0.010185417875084157,
+  "gross_sharpe": -0.10979229148596271,
+  "net_3bps_annual_return": -0.04042541787508414,
+  "net_5bps_annual_return": -0.06058541787508416,
+  "net_5bps_sharpe": -0.653072062503389,
+  "report": "D:\\软件2\\AI-15-demo-main\\--main2\\--main - 副本 (3)\\modeling\\linear_ridge_v1\\supplemental_2025_protocol\\supplemental_2025_protocol_report.md"
+}
